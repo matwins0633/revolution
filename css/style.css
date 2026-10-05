@@ -1,0 +1,168 @@
+/* 回転体をつくろう：見た目 */
+:root {
+  --bg: #e9eef5;
+  --panel: #ffffff;
+  --text: #1f2937;
+  --muted: #5b6575;
+  --border: #c9d2de;
+  --shape: #d97706;
+  --shape-bg: #fff4e0;
+  --axis: #dc2626;
+  --axis-bg: #fde8e8;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --ok: #15803d;
+  --gap: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", "Noto Sans JP", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--gap);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel);
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+  padding: var(--gap);
+  gap: 8px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn {
+  min-height: 56px;
+  min-width: 88px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  background: #f3f5f8;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.btn:hover { background: #e8ecf2; }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+.btn.shape { background: var(--shape-bg); border-color: #f1c27d; }
+.btn.shape:hover { background: #ffe9c2; }
+
+.btn.axis { background: var(--axis-bg); border-color: #f3a5a5; color: #991b1b; }
+.btn.axis[aria-pressed="true"] { background: var(--axis); border-color: var(--axis); color: #fff; }
+
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover { background: var(--primary-dark); }
+
+.btn.danger { background: #fff; color: #6b7280; }
+
+.btn.toggle[aria-pressed="true"] { background: #dbeafe; border-color: var(--primary); color: var(--primary-dark); }
+.btn.toggle[aria-pressed="true"]::before { content: "✓ "; }
+
+.message {
+  margin: 0;
+  min-height: calc(2.8em + 16px);   /* 2行分の高さ。文字数が変わっても方眼の大きさが変わらないように */
+  padding: 6px 12px;
+  font-size: 18px;
+  line-height: 1.4;
+  border-radius: 10px;
+  background: #f3f5f8;
+  display: flex;
+  align-items: center;
+}
+.message.active { background: var(--axis-bg); color: #991b1b; font-weight: 700; }
+.message.error { background: #fee2e2; color: #b91c1c; font-weight: 700; border: 2px solid #f87171; }
+.message.done { background: #dcfce7; color: var(--ok); font-weight: 700; }
+
+.hint {
+  margin: 0;
+  min-height: calc(2.8em + 16px);
+  padding: 6px 12px;
+  font-size: 16px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+}
+
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.stage canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.no3d {
+  margin: 0;
+  padding: 24px;
+  font-size: 18px;
+  text-align: center;
+}
+
+/* 幅の狭い端末：上下に並べる */
+@media (max-width: 800px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1.2fr 1fr;
+    gap: 8px;
+    padding: 8px;
+  }
+  .panel { padding: 8px; gap: 6px; }
+  .btn { min-height: 48px; min-width: 64px; padding: 6px 10px; font-size: 18px; }
+  .toolbar { gap: 6px 10px; }
+  .group { gap: 6px; }
+  .message { font-size: 16px; }
+  .hint { font-size: 15px; min-height: 0; padding: 0 8px; }
+}
+
+/* とても小さい画面では、ページ全体をスクロールできるようにする */
+@media (max-width: 800px) and (max-height: 640px) {
+  .app { height: auto; grid-template-rows: 90vh 80vh; }
+}

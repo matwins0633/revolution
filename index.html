@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>回転体をつくろう</title>
+  <meta name="description" content="平面図形と軸をかいて、回転体ができるようすを3Dで見る中学1年数学の教材">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="app">
+    <section class="panel panel-2d" aria-label="平面図形をかく場所">
+      <div class="toolbar">
+        <div class="group">
+          <button id="btn-triangle" class="btn shape" type="button">三角形</button>
+          <button id="btn-quad" class="btn shape" type="button">四角形</button>
+          <button id="btn-circle" class="btn shape" type="button">円</button>
+        </div>
+        <div class="group">
+          <button id="btn-axis" class="btn axis" type="button" aria-pressed="false">軸を引く</button>
+          <button id="btn-rotate" class="btn primary" type="button">回転させる</button>
+          <button id="btn-clear" class="btn danger" type="button">全部消す</button>
+        </div>
+      </div>
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+      <div class="stage"><canvas id="canvas2d"></canvas></div>
+    </section>
+
+    <section class="panel panel-3d" aria-label="回転体の3D表示">
+      <div class="toolbar">
+        <div class="group">
+          <button id="btn-replay" class="btn" type="button" disabled>もう一度</button>
+          <button id="btn-translucent" class="btn toggle" type="button" aria-pressed="false">半透明</button>
+          <button id="btn-view" class="btn" type="button">はじめの向き</button>
+        </div>
+      </div>
+      <p class="hint">1本指で回す ・ 2本指で大きく／小さく</p>
+      <div id="view3d" class="stage"></div>
+    </section>
+  </main>
+
+  <!-- three.js（r159）はこのリポジトリの中のファイルを使う（外部のサイトには接続しない） -->
+  <script src="vendor/three/three.min.js"></script>
+  <script src="js/geometry.js"></script>
+  <script src="js/editor2d.js"></script>
+  <script src="js/view3d.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
