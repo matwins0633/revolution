@@ -1,7 +1,7 @@
 /*
  * 回転体の数学部分
  *
- * 平面図形（多角形・円・半円）と回転の軸から、回転体の表面（三角形の集まり）をつくる。
+ * 平面図形（多角形・円・半円・フリーハンド）と回転の軸から、回転体の表面（三角形の集まり）をつくる。
  *
  * 考え方：
  *   回転体は「図形のうち軸の片側の部分」と「反対側の部分を軸で折り返したもの」を重ねた形
@@ -96,6 +96,7 @@
     }
 
     var ccw = signedArea(pts.map(function (p) { return [p.x, p.y]; })) > 0;
+    if (shape.type === 'freehand') return freehandEdges(pts, shape.corners || [], ccw);
     var edges = [];
     for (i = 0; i < pts.length; i++) {
       var j = (i + 1) % pts.length, p = pts[i], q = pts[j];
@@ -106,6 +107,33 @@
         var n = ccw ? P(dy / len, -dx / len) : P(-dy / len, dx / len);
         edges.push({ a: p, b: q, na: n, nb: n });
       }
+    }
+    return { pts: pts, edges: edges };
+  }
+
+  /*
+   * フリーハンドの図形（かいた線を整えた多角形）の辺。
+   *   なめらかな所：となりの2辺の向きの平均を点の向きにする（3Dでなめらかに見える）
+   *   角の点（corners[i] が true）：辺ごとの向きを使う（3Dでも角として見える）
+   */
+  function freehandEdges(pts, corners, ccw) {
+    var n = pts.length, en = [], i;
+    for (i = 0; i < n; i++) {   // 辺ごとの外向きの向き
+      var p = pts[i], q = pts[(i + 1) % n];
+      var dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
+      en.push(ccw ? P(dy / len, -dx / len) : P(-dy / len, dx / len));
+    }
+    function vertexNormal(k) {
+      var a = en[(k + n - 1) % n], b = en[k];
+      var x = a.x + b.x, y = a.y + b.y, len = Math.hypot(x, y);
+      return len < 1e-9 ? b : P(x / len, y / len);
+    }
+    var vn = [];
+    for (i = 0; i < n; i++) vn.push(vertexNormal(i));
+    var edges = [];
+    for (i = 0; i < n; i++) {
+      var j = (i + 1) % n;
+      edges.push({ a: pts[i], b: pts[j], na: corners[i] ? en[i] : vn[i], nb: corners[j] ? en[i] : vn[j] });
     }
     return { pts: pts, edges: edges };
   }

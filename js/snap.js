@@ -108,6 +108,30 @@
   }
 
   /*
+   * 曲線の図形（フリーハンド）全体の平行移動での吸い付き
+   *   ずらした図形の、軸にいちばん近い所（軸の片側にあれば軸側の端、少し軸をこえていれば
+   *   いちばん深い所）が SNAP_PX 以内なら、軸に垂直な向きにだけずらして、図形が軸にぴったり接する位置にする。
+   * 戻り値 { pts, contact（接する点） }。吸い付かないときは null。
+   */
+  function snapTranslationTouch(origPts, rawOffset, ctx) {
+    if (!ctx.axis) return null;
+    var f = frame(ctx.axis);
+    var moved = origPts.map(function (p) { return P(p.x + rawOffset.x, p.y + rawOffset.y); });
+    var minR = Infinity, maxR = -Infinity, iMin = -1, iMax = -1;
+    moved.forEach(function (p, i) {
+      var r = signedDist(p, ctx.axis);
+      if (r < minR) { minR = r; iMin = i; }
+      if (r > maxR) { maxR = r; iMax = i; }
+    });
+    // 軸の n の側に接する（いちばん低い所を軸に）か、反対側に接する（いちばん高い所を軸に）か、ずらす量が小さい方
+    var cand = Math.abs(minR) <= Math.abs(maxR) ? { shift: -minR, idx: iMin } : { shift: -maxR, idx: iMax };
+    if (Math.abs(cand.shift) * ctx.scale > SNAP_PX) return null;
+    var pts = moved.map(function (p) { return P(p.x + f.n.x * cand.shift, p.y + f.n.y * cand.shift); });
+    if (!pts.every(function (p) { return inBounds(p, ctx); })) return null;
+    return { pts: pts, contact: footOnAxis(pts[cand.idx], ctx.axis) };
+  }
+
+  /*
    * 円の半径の点が吸い付く先（軸の上の特別な点）の一覧。
    *   接点（中心から軸に下ろした垂線の足。円が軸に接する位置）と、
    *   near が渡されたときは、その近くにある軸上の方眼の交点。
@@ -191,6 +215,7 @@
     isTangent: isTangent,
     snapVertex: snapVertex,
     snapTranslation: snapTranslation,
+    snapTranslationTouch: snapTranslationTouch,
     radiusTargetsOnAxis: radiusTargetsOnAxis,
     snapRadiusHandle: snapRadiusHandle,
     snapCircleCenter: snapCircleCenter

@@ -26,7 +26,7 @@ function moved(shape, ax, angle, dx, dy) {
   function m(p) { return P(p.x * c - p.y * s + dx, p.x * s + p.y * c + dy); }
   var sh = shape.type === 'circle'
     ? { type: 'circle', c: m(shape.c), r: shape.r }
-    : { type: shape.type, pts: shape.pts.map(m), side: shape.side };
+    : { type: shape.type, pts: shape.pts.map(m), side: shape.side, corners: shape.corners };
   return { shape: sh, axis: { p1: m(ax.p1), p2: m(ax.p2) } };
 }
 
@@ -272,6 +272,49 @@ console.log('軸と図形の位置の判定（1か所にまとめた判定）');
   check('軸をまたぐ図形も回転させる設定（true）', Rev.ALLOW_AXIS_CROSSING === true);
   check('半円（弧が右）は軸 x=0 の右側', Rev.axisSide(semi(0, -2, 0, 2, -1), f) === 'neg');
   check('半円を軸がまたぐ', Rev.axisSide(semi(0, -2, 0, 2, -1), Rev.axisFrame(axis(1, 0, 1, 1))) === 'cross');
+})();
+
+
+console.log('フリーハンドの図形（かいた線を整えた多角形）');
+(function () {
+  // なめらかな曲線：円に近い多角形（角なし）
+  function fhCircle(cx, cy, r, n) {
+    var pts = [], corners = [];
+    for (var i = 0; i < n; i++) {
+      var a = i / n * PI * 2;
+      pts.push(P(cx + r * Math.cos(a), cy + r * Math.sin(a)));
+      corners.push(false);
+    }
+    return { type: 'freehand', pts: pts, corners: corners };
+  }
+  var fc = fhCircle(4, 1, 1.5, 192);
+  var ol = Rev.outline(fc);
+  var smooth = ol.edges.every(function (e, i) {
+    var prev = ol.edges[(i + ol.edges.length - 1) % ol.edges.length];
+    return Math.hypot(e.na.x - prev.nb.x, e.na.y - prev.nb.y) < 1e-12;   // となりの辺と同じ向き → なめらか
+  });
+  var radial = ol.edges.every(function (e) {
+    var r = Math.hypot(e.a.x - 4, e.a.y - 1);
+    return (e.na.x * (e.a.x - 4) + e.na.y * (e.a.y - 1)) / r > 0.999;     // 外向き
+  });
+  check('なめらかな所は、となりの辺と同じ向き（3Dでなめらかに見える）', smooth);
+  check('向きは外向き', radial);
+  expectVolume('フリーハンドの円 → ドーナツ形', fc, axis(0, -5, 0, 5), 2 * PI * PI * 4 * 1.5 * 1.5);
+
+  // 角のある形：長方形（4つの角）＋辺の途中の点
+  var rp = [P(1, 0), P(2, 0), P(3, 0), P(3, 2), P(3, 4), P(2, 4), P(1, 4), P(1, 2)];
+  var rc = [true, false, true, false, true, false, true, false];
+  var fr = { type: 'freehand', pts: rp, corners: rc };
+  var olr = Rev.outline(fr);
+  var flat = olr.edges.every(function (e) { return Math.hypot(e.na.x - e.nb.x, e.na.y - e.nb.y) < 1e-12; });
+  var cornerSharp = Math.hypot(olr.edges[0].na.x - olr.edges[7].nb.x, olr.edges[0].na.y - olr.edges[7].nb.y) > 1;
+  check('まっすぐな辺は両端とも同じ向き', flat);
+  check('角の点では、となりの辺と向きが変わる（角として見える）', cornerSharp);
+  expectVolume('フリーハンドの長方形 → 空洞の円柱', fr, axis(0, -5, 0, 5), PI * (9 - 1) * 4);
+  expectVolume('フリーハンドの長方形（左の辺が軸）→ 円柱', { type: 'freehand', pts: rp.map(function (p) { return P(p.x - 1, p.y); }), corners: rc },
+    axis(0, -5, 0, 5), PI * 4 * 4);
+  expectIntegrated('フリーハンドの円を軸がまたぐ', fhCircle(0.6, 0, 1.5, 192), axis(0, -5, 0, 5));
+  check('フリーハンドの円を軸がまたぐと crossing', Rev.analyze(fhCircle(0.6, 0, 1.5, 192), axis(0, -5, 0, 5)).crossing === true);
 })();
 
 console.log('その他');

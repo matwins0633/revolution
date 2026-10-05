@@ -15,9 +15,14 @@
       <symbol id="i-quad" viewBox="0 0 24 24"><rect x="4.5" y="6" width="15" height="12" rx="1"/></symbol>
       <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></symbol>
       <symbol id="i-semi" viewBox="0 0 24 24"><path d="M4.5 16.5a7.5 7.5 0 0 1 15 0z"/></symbol>
+      <symbol id="i-free" viewBox="0 0 24 24"><path d="M8.5 19.2C4.5 18 3 12.5 5.6 8.6S14 3.6 17.6 6.4s2.9 9.2-1.4 11.6c-2.6 1.4-5.6 1.4-7.2.4"/><circle cx="8.6" cy="19.2" r="1.8" fill="currentColor"/></symbol>
       <symbol id="i-axis" viewBox="0 0 24 24"><path d="M6 18 18 6" stroke-dasharray="3 3"/><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="5" r="2" fill="currentColor"/></symbol>
       <symbol id="i-solid" viewBox="0 0 24 24"><path d="M12 2.5v19" stroke-dasharray="2.5 2.5"/><path d="M15.5 9.4A8 3.2 0 1 1 8.5 9.4"/><path d="m13.5 7.4 2.2 2-2.7 1.1"/></symbol>
       <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a6 6 0 0 1 0 12h-3"/></symbol>
+      <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 5l5 5-5 5"/><path d="M20 10H10a6 6 0 0 0 0 12h3"/></symbol>
+      <symbol id="i-erase-shape" viewBox="0 0 24 24"><path d="M1.8 19.5 8 4.5l6.2 15z" stroke="#D9730D"/><path d="M11.8 18.2 18 12l4.6 4.6-4.4 4.4h-3.6z" fill="#FFFFFF"/><path d="m14.8 15.2 4.6 4.6"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
       <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></symbol>
       <symbol id="i-point" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/></symbol>
       <symbol id="i-turn" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95M19 4v4h-4"/></symbol>
@@ -42,6 +47,7 @@
             <button id="btn-quad" class="btn tool shape" type="button"><svg class="icon"><use href="#i-quad"/></svg>四角形</button>
             <button id="btn-circle" class="btn tool shape" type="button"><svg class="icon"><use href="#i-circle"/></svg>円</button>
             <button id="btn-semicircle" class="btn tool shape" type="button"><svg class="icon"><use href="#i-semi"/></svg>半円</button>
+            <button id="btn-draw" class="btn tool shape draw" type="button" aria-pressed="false"><svg class="icon"><use href="#i-free"/></svg><span id="draw-label">フリーハンドでかく</span></button>
           </div>
         </li>
         <li class="step" data-step="2">
@@ -69,9 +75,15 @@
         <span class="loop-label">くり返す</span>
       </div>
       <div class="rail-tools">
-        <button id="btn-undo" class="btn tool" type="button" disabled><svg class="icon"><use href="#i-undo"/></svg>元に戻す</button>
+        <div class="history-row">
+          <button id="btn-undo" class="btn tool" type="button" disabled><svg class="icon"><use href="#i-undo"/></svg>元に戻す</button>
+          <button id="btn-redo" class="btn tool" type="button" disabled><svg class="icon"><use href="#i-redo"/></svg>進む</button>
+        </div>
         <hr class="sep">
-        <button id="btn-clear" class="btn tool quiet" type="button"><svg class="icon"><use href="#i-trash"/></svg>全部消す</button>
+        <div class="erase-col">
+          <button id="btn-clear-shape" class="btn tool quiet" type="button" disabled><svg class="icon"><use href="#i-erase-shape"/></svg>図形だけ消す</button>
+          <button id="btn-clear" class="btn tool quiet" type="button"><svg class="icon"><use href="#i-trash"/></svg>全部消す</button>
+        </div>
       </div>
     </nav>
 
@@ -99,7 +111,7 @@
           <span class="track" aria-hidden="true"><span class="knob"></span></span>
           <span class="switch-label">半透明</span>
         </label>
-        <button id="btn-view" class="btn small" type="button"><svg class="icon"><use href="#i-reset"/></svg>はじめの向きにリセット</button>
+        <button id="btn-view" class="btn small" type="button"><svg class="icon"><use href="#i-reset"/></svg><span>はじめの向きに<br class="narrow-br">リセット</span></button>
       </div>
       <div class="stage stage-3d">
         <div id="view3d"></div>
@@ -122,13 +134,32 @@
     </section>
   </div>
 
+  <!-- 右上の「使い方」：README の内容を、生徒向け・先生向けのタブで表示する（js/help.js） -->
+  <button id="btn-info" class="btn info-btn" type="button" aria-label="使い方" aria-haspopup="dialog" aria-expanded="false" aria-controls="help"><svg class="icon"><use href="#i-info"/></svg></button>
+  <div class="help" id="help" role="dialog" aria-modal="true" aria-labelledby="help-title" hidden>
+    <div class="help-panel">
+      <div class="help-head">
+        <h2 class="help-title" id="help-title">使い方</h2>
+        <div class="help-tabs" role="tablist" aria-label="だれ向けの説明か">
+          <button class="help-tab" id="tab-student" type="button" role="tab" data-tab="student" aria-selected="true" aria-controls="help-body">生徒向け</button>
+          <button class="help-tab" id="tab-teacher" type="button" role="tab" data-tab="teacher" aria-selected="false" aria-controls="help-body" tabindex="-1">先生向け</button>
+        </div>
+        <button class="btn help-close" id="help-close" type="button" aria-label="閉じる"><svg class="icon"><use href="#i-close"/></svg></button>
+      </div>
+      <div class="help-body" id="help-body" role="tabpanel" tabindex="0"></div>
+    </div>
+  </div>
+
   <!-- three.js（r159）はこのリポジトリの中のファイルを使う（外部のサイトには接続しない） -->
   <script src="vendor/three/three.min.js"></script>
   <script src="js/geometry.js"></script>
   <script src="js/snap.js"></script>
+  <script src="js/freehand.js"></script>
   <script src="js/transform.js"></script>
   <script src="js/editor2d.js"></script>
   <script src="js/view3d.js"></script>
+  <script src="js/readme-text.js"></script>
+  <script src="js/help.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
