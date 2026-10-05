@@ -1,18 +1,31 @@
-/* 回転体をつくろう：見た目 */
+/*
+ * 回転体をつくろう：見た目
+ *
+ * 色の役割（作図の画面・3D・ボタンでそろえる）
+ *   紺   … 文字、いちばん大事なボタン「回転体をつくる」、今やると良い段階
+ *   オレンジ … 図形      赤 … 軸      青 … 折り返し・回転体      緑 … 軸にぴったり合った点
+ * 押す部分はすべて 44px 以上。オン・オフはスイッチの形、押すと動くものは角の丸いボタン。
+ */
 :root {
-  --bg: #e9eef5;
-  --panel: #ffffff;
-  --text: #1f2937;
-  --muted: #5b6575;
-  --border: #c9d2de;
-  --shape: #d97706;
-  --shape-bg: #fff4e0;
-  --axis: #dc2626;
-  --axis-bg: #fde8e8;
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
-  --ok: #15803d;
+  --ink: #1F2A44;
+  --ink-soft: #3C4866;
+  --muted: #5B6577;
+  --page: #E9EEF4;
+  --paper: #FFFFFF;
+  --line: #C8D1DD;
+  --line-soft: #A3AEC0;
+  --tint: #F2F5F9;
+  --current: #E2E9F4;
+  --shape: #D9730D;
+  --axis: #D62839;
+  --axis-bg: #FDECEE;
+  --fold: #1F5FD6;
+  --fold-bg: #E8EFFC;
+  --fit: #13803C;
+  --fit-bg: #E5F4EA;
   --gap: 10px;
+  --radius: 14px;
+  --font: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", "Noto Sans JP", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -20,154 +33,493 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", "Noto Sans JP", sans-serif;
+  overflow: hidden;
+  overscroll-behavior: none;            /* 画面の端の引っぱり・スクロールをしない */
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.45;
   -webkit-text-size-adjust: 100%;
+  -webkit-user-select: none;            /* 長押しで文字が選ばれないように */
+  user-select: none;
+  -webkit-touch-callout: none;          /* 長押しでメニューが出ないように */
+  -webkit-tap-highlight-color: transparent;
 }
 
 .app {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 256px minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--gap);
   height: 100vh;
   height: 100dvh;
   padding: var(--gap);
+  padding-left: max(var(--gap), env(safe-area-inset-left));
+  padding-right: max(var(--gap), env(safe-area-inset-right));
 }
 
+/* ---------- アイコン ---------- */
+.icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- ボタン ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  touch-action: manipulation;           /* ダブルタップで拡大しないように */
+}
+.btn:active { transform: translateY(1px); background: var(--tint); }
+.btn:disabled { opacity: 0.4; cursor: default; transform: none; background: var(--paper); }
+.btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.btn.small { min-height: 44px; font-size: 15px; padding: 4px 10px; }
+
+.btn.shape .icon { color: var(--shape); }
+.btn.axis .icon { color: var(--axis); }
+.btn.axis[aria-pressed="true"] { border: 2px solid var(--axis); background: var(--axis-bg); color: #8E1622; }
+
+/* いちばん大事な操作：ここだけ塗りつぶし */
+.btn.primary {
+  width: 100%;
+  min-height: 56px;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #FFFFFF;
+  font-size: 17px;
+}
+.btn.primary:active { background: var(--ink-soft); }
+
+.btn.quiet { color: var(--muted); font-weight: 600; }
+.btn.quiet .icon { color: var(--muted); }
+
+/* ---------- スイッチ（オン・オフの切り替え） ---------- */
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+.switch[hidden] { display: none; }
+.switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.track {
+  position: relative;
+  width: 46px;
+  height: 28px;
+  flex: none;
+  border-radius: 14px;
+  background: var(--line);
+  transition: background 0.15s;
+}
+.knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 1px 2px rgba(31, 42, 68, 0.35);
+  transition: transform 0.15s;
+}
+.switch input:checked + .track { background: var(--ink); }
+.switch.fold input:checked + .track { background: var(--fold); }
+.switch input:checked + .track .knob { transform: translateX(18px); }
+.switch input:focus-visible + .track { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+/* ---------- 手順の列 ---------- */
+.rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 10px 12px 12px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  overflow-y: auto;
+}
+.title {
+  margin: 0 0 6px;
+  font-size: 19px;
+  font-weight: 800;
+}
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step {
+  padding: 6px 8px 8px;
+  border-radius: 12px;
+}
+.cycle-step { padding-right: 28px; }     /* 右に「くり返す」の矢印の場所をあける */
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+}
+/* 今やると良い段階をそっと強調する（ほかの段階もいつでも使える） */
+.step.is-current { background: var(--current); }
+.step.is-current .badge { background: var(--ink); color: #FFFFFF; }
+
+.shape-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.shape-grid .btn { min-height: 46px; padding: 4px 6px; gap: 5px; font-size: 15px; white-space: nowrap; }
+#btn-axis { width: 100%; }
+
+.tips {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.tips li { display: flex; align-items: center; gap: 5px; min-height: 24px; }
+.tips .icon { width: 19px; height: 19px; color: var(--muted); }
+.cycle-mark { display: none; }
+
+/* ④から③に戻る矢印 */
+.loop {
+  position: absolute;
+  right: 12px;
+  width: 14px;
+  pointer-events: none;
+}
+.loop-line {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--line-soft);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+}
+.loop-line::before {                     /* 矢印の先（③の方を向く） */
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: -8px;
+  border: 5px solid transparent;
+  border-right: 8px solid var(--line-soft);
+  border-left: none;
+}
+.loop-label {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translate(-50%, -50%);
+  padding: 3px 0;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.1;
+  writing-mode: vertical-rl;
+}
+.rail.loop-on .loop-line { border-color: var(--ink); }
+.rail.loop-on .loop-line::before { border-right-color: var(--ink); }
+.rail.loop-on .loop-label { color: var(--ink); font-weight: 700; }
+
+.rail-tools {
+  display: flex;
+  flex-direction: column;
+  margin-top: auto;
+  padding-top: 10px;
+}
+.sep {
+  width: 100%;
+  margin: 12px 0;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- 作図と3Dの場所 ---------- */
 .panel {
   display: flex;
   flex-direction: column;
+  gap: 8px;
   min-width: 0;
   min-height: 0;
-  background: var(--panel);
-  border-radius: 14px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
-  padding: var(--gap);
-  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--paper);
 }
 
-.toolbar {
+.guide {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
-
-.group {
-  display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-}
-
-.btn {
-  min-height: 56px;
-  min-width: 88px;
-  padding: 8px 16px;
-  font: inherit;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text);
-  background: #f3f5f8;
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-}
-.btn:hover { background: #e8ecf2; }
-.btn:active { transform: translateY(1px); }
-.btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-.btn:disabled { opacity: 0.4; cursor: default; transform: none; }
-
-.btn.shape { background: var(--shape-bg); border-color: #f1c27d; }
-.btn.shape:hover { background: #ffe9c2; }
-
-.btn.axis { background: var(--axis-bg); border-color: #f3a5a5; color: #991b1b; }
-.btn.axis[aria-pressed="true"] { background: var(--axis); border-color: var(--axis); color: #fff; }
-
-.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-.btn.primary:hover { background: var(--primary-dark); }
-
-.btn.danger { background: #fff; color: #6b7280; }
-
-.btn.toggle[aria-pressed="true"] { background: #dbeafe; border-color: var(--primary); color: var(--primary-dark); }
-.btn.toggle[aria-pressed="true"]::before { content: "✓ "; }
-.btn[hidden] { display: none; }
-.btn.fold { background: #eef4ff; border-color: #a9c1f5; color: #1e40af; }
-.btn.fold[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }
-.message.info { background: #e8efff; color: #1e3a8a; font-weight: 700; }
-
-.message {
-  margin: 0;
-  min-height: calc(2.8em + 16px);   /* 2行分の高さ。文字数が変わっても方眼の大きさが変わらないように */
-  padding: 6px 12px;
-  font-size: 18px;
-  line-height: 1.4;
+  min-height: 82px;                      /* 3行分。文の長さで作図の場所の大きさが変わらないように */
+  padding: 6px 8px 6px 12px;
   border-radius: 10px;
-  background: #f3f5f8;
-  display: flex;
-  align-items: center;
+  background: var(--tint);
 }
-.message.active { background: var(--axis-bg); color: #991b1b; font-weight: 700; }
-.message.error { background: #fee2e2; color: #b91c1c; font-weight: 700; border: 2px solid #f87171; }
-.message.fit { background: #dcfce7; color: #166534; }
-.message.done { background: #dcfce7; color: var(--ok); font-weight: 700; }
-
-.hint {
-  margin: 0;
-  min-height: calc(2.8em + 16px);
-  padding: 6px 12px;
-  font-size: 16px;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-}
+.message { flex: 1; margin: 0; font-size: 16px; line-height: 1.45; }
+.guide[data-kind="active"] { background: var(--axis-bg); color: #8E1622; }
+.guide[data-kind="info"] { background: var(--fold-bg); color: #163E8C; }
+.guide[data-kind="fit"],
+.guide[data-kind="done"] { background: var(--fit-bg); color: #0E5A2B; }
+.guide[data-kind="error"] { background: var(--axis-bg); color: #8E1622; box-shadow: inset 0 0 0 2px var(--axis); }
+.guide .message { font-weight: 600; }
+.switch.fold .switch-label { max-width: 4.6em; white-space: normal; line-height: 1.2; }
 
 .stage {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  border: 2px solid var(--border);
-  border-radius: 10px;
   overflow: hidden;
-  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
 }
-
 .stage canvas {
   position: absolute;
   inset: 0;
   display: block;
-  touch-action: none;
-  user-select: none;
+  touch-action: none;                    /* 指の動きはすべてこの教材で受け取る */
   -webkit-user-select: none;
+  user-select: none;
   -webkit-touch-callout: none;
 }
+#view3d { position: absolute; inset: 0; }
 
-.no3d {
-  margin: 0;
+.floating {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  box-shadow: 0 1px 3px rgba(31, 42, 68, 0.2);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 24px;
-  font-size: 18px;
+  color: var(--muted);
+  font-size: 17px;
   text-align: center;
+  pointer-events: none;
+}
+.placeholder[hidden] { display: none; }
+/* 図形と軸が置かれているときは、上の方に小さく出して図形にかぶらないようにする */
+.placeholder.compact {
+  inset: 10px 10px auto 10px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 1.5px var(--line);
+  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+.placeholder.compact .icon.big { width: 28px; height: 28px; }
+.placeholder.compact br { display: none; }
+.placeholder p { margin: 0; }
+.icon.big { width: 56px; height: 56px; color: var(--line-soft); stroke-width: 1.6; }
+
+.corner-hint {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
 }
 
-/* 幅の狭い端末：上下に並べる */
-@media (max-width: 800px) {
+.no3d { margin: 0; padding: 24px; font-size: 17px; text-align: center; }
+
+/* 回転のようすを見る（もう一度・角度のスライダー） */
+.anim { display: flex; flex-direction: column; gap: 2px; padding: 0 4px; }
+.anim-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.anim-head label { font-size: 15px; font-weight: 700; }
+.anim-head output {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.anim-row { display: flex; align-items: center; gap: 12px; }
+
+input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: none;
+}
+input[type="range"]::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: var(--line); }
+input[type="range"]::-webkit-slider-thumb {
+  width: 30px;
+  height: 30px;
+  margin-top: -11px;
+  border: 3px solid #FFFFFF;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 1px 3px rgba(31, 42, 68, 0.4);
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="range"]::-moz-range-track { height: 8px; border-radius: 4px; background: var(--line); }
+input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #FFFFFF;
+  border-radius: 50%;
+  background: var(--ink);
+}
+input[type="range"]:disabled { opacity: 0.4; }
+input[type="range"]:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; border-radius: 6px; }
+
+/* 高さの少ない横向きの画面（iPad 横 1024×768 など）では、手順の列を少しつめる */
+@media (orientation: landscape) and (max-height: 740px) {
+  .title { font-size: 17px; margin-bottom: 4px; }
+  .tips li { min-height: 21px; }
+  .step { padding-top: 4px; padding-bottom: 6px; }
+  .step-head { margin-bottom: 4px; }
+  .btn.primary { min-height: 52px; }
+  .tips li { min-height: 22px; }
+  .sep { margin: 8px 0; }
+  .message { font-size: 15px; }
+}
+
+/* ---------- 縦向き（iPad 縦）や幅の狭い画面：手順の列を上の帯にして、作図と3Dを縦に並べる ---------- */
+@media (orientation: portrait), (max-width: 900px) {
   .app {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1.2fr 1fr;
-    gap: 8px;
-    padding: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
   }
-  .panel { padding: 8px; gap: 6px; }
-  .btn { min-height: 48px; min-width: 64px; padding: 6px 10px; font-size: 18px; }
-  .toolbar { gap: 6px 10px; }
-  .group { gap: 6px; }
-  .message { font-size: 16px; }
-  .hint { font-size: 15px; min-height: 0; padding: 0 8px; }
+  .rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    overflow: visible;
+  }
+  .title { display: none; }
+  .steps {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+  }
+  .cycle-step { padding-right: 8px; }
+  .step-head { margin: 0; white-space: nowrap; }
+  .shape-grid { grid-template-columns: repeat(4, auto); }
+  .shape-grid .btn { padding: 4px 8px; }
+  #btn-axis { width: auto; }
+  .btn.primary { width: auto; padding: 6px 14px; }
+  .tips { display: none; }
+  .step[data-step="4"] .step-name { display: none; }   /* ボタンに同じ言葉があるので、見出しは番号だけ */
+  .cycle-mark {                                         /* ③と④をくり返す印 */
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1;
+  }
+  .cycle-mark .icon { width: 22px; height: 22px; }
+  .rail.loop-on .cycle-mark { color: var(--ink); font-weight: 700; }
+  .loop { display: none; }
+  .rail-tools {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 0 auto;
+    padding: 0;
+  }
+  .sep { width: 1px; height: 32px; margin: 0 8px; border-top: none; border-left: 1px solid var(--line); }
 }
 
-/* とても小さい画面では、ページ全体をスクロールできるようにする */
-@media (max-width: 800px) and (max-height: 640px) {
-  .app { height: auto; grid-template-rows: 90vh 80vh; }
+/* スマホなど：ページのスクロールだけは許す */
+@media (max-width: 600px) {
+  html, body { overflow: auto; }
+  .app { height: auto; grid-template-rows: auto 75vh 75vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track, .knob { transition: none; }
 }

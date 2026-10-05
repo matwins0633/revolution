@@ -2,50 +2,131 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>回転体をつくろう</title>
-  <meta name="description" content="平面図形と軸をかいて、回転体ができるようすを3Dで見る中学1年数学の教材">
+  <meta name="description" content="平面図形と軸をかいて、回転体ができるようすを3Dで確かめる中学1年数学の教材">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <main class="app">
-    <section class="panel panel-2d" aria-label="平面図形をかく場所">
-      <div class="toolbar">
-        <div class="group">
-          <button id="btn-triangle" class="btn shape" type="button">三角形</button>
-          <button id="btn-quad" class="btn shape" type="button">四角形</button>
-          <button id="btn-circle" class="btn shape" type="button">円</button>
-          <button id="btn-semicircle" class="btn shape" type="button">半円</button>
-          <button id="btn-arc" class="btn shape" type="button" hidden>弧の向き</button>
-        </div>
-        <div class="group">
-          <button id="btn-axis" class="btn axis" type="button" aria-pressed="false">軸を引く</button>
-          <button id="btn-rotate" class="btn primary" type="button">回転させる</button>
-          <button id="btn-clear" class="btn danger" type="button">全部消す</button>
-          <button id="btn-fold" class="btn toggle fold" type="button" aria-pressed="false" disabled>折り返しを見る</button>
-        </div>
+  <!-- アイコン（ページの中に直接書き込む線画。外部からは読み込まない） -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-tri" viewBox="0 0 24 24"><path d="M12 4.5 20 19H4z"/></symbol>
+      <symbol id="i-quad" viewBox="0 0 24 24"><rect x="4.5" y="6" width="15" height="12" rx="1"/></symbol>
+      <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></symbol>
+      <symbol id="i-semi" viewBox="0 0 24 24"><path d="M4.5 16.5a7.5 7.5 0 0 1 15 0z"/></symbol>
+      <symbol id="i-axis" viewBox="0 0 24 24"><path d="M6 18 18 6" stroke-dasharray="3 3"/><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="5" r="2" fill="currentColor"/></symbol>
+      <symbol id="i-solid" viewBox="0 0 24 24"><path d="M12 2.5v19" stroke-dasharray="2.5 2.5"/><path d="M15.5 9.4A8 3.2 0 1 1 8.5 9.4"/><path d="m13.5 7.4 2.2 2-2.7 1.1"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a6 6 0 0 1 0 12h-3"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></symbol>
+      <symbol id="i-point" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/></symbol>
+      <symbol id="i-turn" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95M19 4v4h-4"/></symbol>
+      <symbol id="i-flip" viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="2.5 2.5"/><path d="M9 7 4 17h5zM15 7l5 10h-5z"/></symbol>
+      <symbol id="i-axismove" viewBox="0 0 24 24"><path d="M4 20 20 4" stroke-dasharray="3 3"/><path d="m12 8 4 4-4 4-4-4z"/></symbol>
+      <symbol id="i-replay" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4h-4"/><path d="m10 8.5 5.5 3.5-5.5 3.5z" fill="currentColor"/></symbol>
+      <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.34-5.66"/><path d="M4 4v4h4"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></symbol>
+      <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="9" y="9" width="6" height="6" rx="1"/></symbol>
+      <symbol id="i-loop" viewBox="0 0 24 24"><path d="M5 12a7 7 0 0 1 12-5M19 12a7 7 0 0 1-12 5"/><path d="M17 3v4h-4M7 21v-4h4"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app">
+    <!-- 手順の列 -->
+    <nav class="rail" id="rail" aria-label="手順" data-current="1">
+      <h1 class="title">回転体をつくろう</h1>
+      <ol class="steps">
+        <li class="step" data-step="1">
+          <p class="step-head"><span class="badge">1</span><span class="step-name">図形をえらぶ</span></p>
+          <div class="shape-grid">
+            <button id="btn-triangle" class="btn tool shape" type="button"><svg class="icon"><use href="#i-tri"/></svg>三角形</button>
+            <button id="btn-quad" class="btn tool shape" type="button"><svg class="icon"><use href="#i-quad"/></svg>四角形</button>
+            <button id="btn-circle" class="btn tool shape" type="button"><svg class="icon"><use href="#i-circle"/></svg>円</button>
+            <button id="btn-semicircle" class="btn tool shape" type="button"><svg class="icon"><use href="#i-semi"/></svg>半円</button>
+          </div>
+        </li>
+        <li class="step" data-step="2">
+          <p class="step-head"><span class="badge">2</span><span class="step-name">軸をひく</span></p>
+          <button id="btn-axis" class="btn tool axis" type="button" aria-pressed="false"><svg class="icon"><use href="#i-axis"/></svg>軸をひく</button>
+        </li>
+        <li class="step cycle-step" data-step="3">
+          <p class="step-head"><span class="badge">3</span><span class="step-name">形や位置を変えてみる</span></p>
+          <ul class="tips">
+            <li><svg class="icon"><use href="#i-point"/></svg>点を動かす</li>
+            <li><svg class="icon"><use href="#i-turn"/></svg>図形を回す</li>
+            <li><svg class="icon"><use href="#i-flip"/></svg>図形を裏返す</li>
+            <li><svg class="icon"><use href="#i-axismove"/></svg>軸を動かす</li>
+          </ul>
+          <span class="cycle-mark" aria-hidden="true"><svg class="icon"><use href="#i-loop"/></svg>くり返す</span>
+        </li>
+        <li class="step cycle-step" data-step="4">
+          <p class="step-head"><span class="badge">4</span><span class="step-name">回転体をつくる</span></p>
+          <button id="btn-rotate" class="btn primary" type="button"><svg class="icon"><use href="#i-solid"/></svg>回転体をつくる</button>
+        </li>
+      </ol>
+      <!-- ④から③に戻る矢印：③と④を何度もくり返して試す -->
+      <div class="loop" id="loop" aria-hidden="true">
+        <span class="loop-line"></span>
+        <span class="loop-label">くり返す</span>
       </div>
-      <p id="message" class="message" role="status" aria-live="polite"></p>
-      <div class="stage"><canvas id="canvas2d"></canvas></div>
+      <div class="rail-tools">
+        <button id="btn-undo" class="btn tool" type="button" disabled><svg class="icon"><use href="#i-undo"/></svg>元に戻す</button>
+        <hr class="sep">
+        <button id="btn-clear" class="btn tool quiet" type="button"><svg class="icon"><use href="#i-trash"/></svg>全部消す</button>
+      </div>
+    </nav>
+
+    <!-- 作図 -->
+    <section class="panel panel-2d" aria-label="平面図形をかく場所">
+      <div class="guide">
+        <p id="message" class="message" role="status" aria-live="polite"></p>
+        <label class="switch fold" id="fold-switch" hidden>
+          <input type="checkbox" id="btn-fold" role="switch">
+          <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          <span class="switch-label">折り返しを見る</span>
+        </label>
+      </div>
+      <div class="stage" id="stage2d">
+        <canvas id="canvas2d"></canvas>
+        <button id="btn-fit" class="btn small floating" type="button"><svg class="icon"><use href="#i-fit"/></svg>全体を表示</button>
+      </div>
     </section>
 
+    <!-- 3D -->
     <section class="panel panel-3d" aria-label="回転体の3D表示">
       <div class="toolbar">
-        <div class="group">
-          <button id="btn-replay" class="btn" type="button" disabled>もう一度</button>
-          <button id="btn-translucent" class="btn toggle" type="button" aria-pressed="false">半透明</button>
-          <button id="btn-view" class="btn" type="button">はじめの向き</button>
+        <label class="switch">
+          <input type="checkbox" id="btn-translucent" role="switch">
+          <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          <span class="switch-label">半透明</span>
+        </label>
+        <button id="btn-view" class="btn small" type="button"><svg class="icon"><use href="#i-reset"/></svg>はじめの向きにリセット</button>
+      </div>
+      <div class="stage stage-3d">
+        <div id="view3d"></div>
+        <div class="placeholder" id="placeholder3d">
+          <svg class="icon big"><use href="#i-solid"/></svg>
+          <p>左で図形と軸をかいて、<br>④「回転体をつくる」を押そう</p>
+        </div>
+        <p class="corner-hint">1本指で回す・2本指で大きく／小さく</p>
+      </div>
+      <div class="anim">
+        <div class="anim-head">
+          <label for="angle">軸のまわりに回した角度</label>
+          <output id="angle-out" for="angle">0°</output>
+        </div>
+        <div class="anim-row">
+          <button id="btn-replay" class="btn small" type="button" disabled><svg class="icon"><use href="#i-replay"/></svg>もう一度</button>
+          <input type="range" id="angle" min="0" max="360" step="1" value="0" disabled>
         </div>
       </div>
-      <p class="hint">1本指で回す ・ 2本指で大きく／小さく</p>
-      <div id="view3d" class="stage"></div>
     </section>
-  </main>
+  </div>
 
   <!-- three.js（r159）はこのリポジトリの中のファイルを使う（外部のサイトには接続しない） -->
   <script src="vendor/three/three.min.js"></script>
   <script src="js/geometry.js"></script>
   <script src="js/snap.js"></script>
+  <script src="js/transform.js"></script>
   <script src="js/editor2d.js"></script>
   <script src="js/view3d.js"></script>
   <script src="js/main.js"></script>

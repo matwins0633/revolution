@@ -3,6 +3,8 @@
  *
  * 左でかいた図形は、同じ向き（右が x、上が y）のまま空間に置き、実際に引いた軸のまわりに回す。
  * 視点の操作：1本指（マウスのドラッグ）で回転、2本指のピンチ（マウスのホイール）で拡大・縮小。
+ * Apple Pencil が触れている間は、指の触れ（手のひら）を無視する。
+ * 回転のようすは、アニメーションのほか、角度（0〜360°）を指定して途中で止めて見られる（setAngle）。
  */
 (function (root) {
   'use strict';
@@ -13,12 +15,12 @@
   var VIEW_ELEVATION = 0.35; // はじめの向き（上からの角度）
   var FOV = 40;
 
-  var COLORS = {
-    background: 0xf4f7fb,
-    solid: 0x4f9de8,
-    shape: 0xf59e0b,
-    shapeEdge: 0xb45309,
-    axis: 0xdc2626
+  var COLORS = {            // 作図の画面と同じ色の役割
+    background: 0xf7f9fc,
+    solid: 0x4f8fd8,         // 回転体（青）
+    shape: 0xf2a33a,         // 図形（オレンジ）
+    shapeEdge: 0xb35a00,
+    axis: 0xd62839           // 軸（赤）
   };
 
   function View3D(container, callbacks) {
@@ -277,6 +279,16 @@
     this.moving.matrix.copy(m);
     this.moving.matrixWorldNeedsUpdate = true;
     this.moving.visible = progress > 0 && progress < 1;
+    this.progress = progress;
+    if (this.cb.onProgress) this.cb.onProgress(progress);
+  };
+
+  /* 角度（0〜360°）を指定して、そこまで回したところを表示する（アニメーションは止める） */
+  View3D.prototype.setAngle = function (deg) {
+    if (!this.solid) return;
+    this.stopAnimation();
+    this.setProgress(Math.max(0, Math.min(360, deg)) / 360);
+    this.requestRender();
   };
 
   View3D.prototype.tick = function (now) {
@@ -342,8 +354,21 @@
       return Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y);
     }
 
+    var types = new Map();
+    function penDown() {
+      var found = false;
+      types.forEach(function (t) { if (t === 'pen') found = true; });
+      return found;
+    }
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     el.addEventListener('pointerdown', function (e) {
       e.preventDefault();
+      // Apple Pencil が触れている間は、指の触れ（手のひら）を無視する
+      if (e.pointerType === 'touch' && penDown()) return;
+      if (e.pointerType === 'pen') {
+        types.forEach(function (t, id) { if (t === 'touch') { pointers.delete(id); types.delete(id); } });
+      }
+      types.set(e.pointerId, e.pointerType);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       try { el.setPointerCapture(e.pointerId); } catch (err) { /* 古いブラウザ */ }
       if (pointers.size === 2) pinchDist = pinchLength();
@@ -366,6 +391,7 @@
     });
     function up(e) {
       pointers.delete(e.pointerId);
+      types.delete(e.pointerId);
       if (pointers.size === 2) pinchDist = pinchLength();
     }
     el.addEventListener('pointerup', up);
