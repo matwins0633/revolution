@@ -3,6 +3,8 @@
  *
  * 左でかいた図形は、同じ向き（右が x、上が y）のまま空間に置き、実際に引いた軸のまわりに回す。
  * 視点の操作：1本指（マウスのドラッグ）で回転、2本指のピンチ（マウスのホイール）で拡大・縮小。
+ * Apple Pencil が触れている間は、指の触れ（手のひら）を無視する。
+ * 回転のようすは、アニメーションのほか、角度（0〜360°）を指定して途中で止めて見られる（setAngle）。
  */
 (function (root) {
   'use strict';
@@ -13,12 +15,12 @@
   var VIEW_ELEVATION = 0.35; // はじめの向き（上からの角度）
   var FOV = 40;
 
-  var COLORS = {
-    background: 0xf4f7fb,
-    solid: 0x4f9de8,
-    shape: 0xf59e0b,
-    shapeEdge: 0xb45309,
-    axis: 0xdc2626
+  var COLORS = {            // 作図の画面と同じ色の役割
+    background: 0xf7f9fc,
+    solid: 0x4f8fd8,         // 回転体（青）
+    shape: 0xf2a33a,         // 図形（オレンジ）
+    shapeEdge: 0xb35a00,
+    axis: 0xd62839           // 軸（赤）
   };
 
   function View3D(container, callbacks) {
@@ -125,17 +127,14 @@
 
   /* 平面図形（面と輪郭線）をつくる */
   View3D.prototype.makeShape = function (shape) {
+    var outline = root.Rev.outline(shape).pts;   // 円・半円は細かい多角形として
     var s = new THREE.Shape();
-    if (shape.type === 'polygon') {
-      s.moveTo(shape.pts[0].x, shape.pts[0].y);
-      for (var i = 1; i < shape.pts.length; i++) s.lineTo(shape.pts[i].x, shape.pts[i].y);
-      s.closePath();
-    } else {
-      s.absarc(shape.c.x, shape.c.y, shape.r, 0, Math.PI * 2, false);
-    }
+    s.moveTo(outline[0].x, outline[0].y);
+    for (var i = 1; i < outline.length; i++) s.lineTo(outline[i].x, outline[i].y);
+    s.closePath();
     var g = new THREE.Group();
-    g.add(new THREE.Mesh(new THREE.ShapeGeometry(s, 48), this.shapeMaterial));
-    var pts = s.getPoints(64).map(function (p) { return new THREE.Vector3(p.x, p.y, 0); });
+    g.add(new THREE.Mesh(new THREE.ShapeGeometry(s), this.shapeMaterial));
+    var pts = outline.map(function (p) { return new THREE.Vector3(p.x, p.y, 0); });
     g.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), this.edgeMaterial));
     return g;
   };
@@ -186,10 +185,7 @@
   };
 
   View3D.prototype.shapePoints = function (shape) {
-    if (!shape) return [];
-    if (shape.type === 'polygon') return shape.pts.slice();
-    var c = shape.c, r = shape.r;
-    return [{ x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y + r }];
+    return shape ? root.Rev.outline(shape).pts : [];
   };
 
   /* 点を軸に投影したときの範囲 */
@@ -200,10 +196,6 @@
       var t = (p.x - f.A.x) * f.u.x + (p.y - f.A.y) * f.u.y;
       lo = Math.min(lo, t); hi = Math.max(hi, t);
     });
-    if (this.shapeData && this.shapeData.type === 'circle') {
-      var c = this.shapeData.c, tc = (c.x - f.A.x) * f.u.x + (c.y - f.A.y) * f.u.y;
-      lo = Math.min(lo, tc - this.shapeData.r); hi = Math.max(hi, tc + this.shapeData.r);
-    }
     return [lo, hi];
   };
 
@@ -287,6 +279,16 @@
     this.moving.matrix.copy(m);
     this.moving.matrixWorldNeedsUpdate = true;
     this.moving.visible = progress > 0 && progress < 1;
+    this.progress = progress;
+    if (this.cb.onProgress) this.cb.onProgress(progress);
+  };
+
+  /* 角度（0〜360°）を指定して、そこまで回したところを表示する（アニメーションは止める） */
+  View3D.prototype.setAngle = function (deg) {
+    if (!this.solid) return;
+    this.stopAnimation();
+    this.setProgress(Math.max(0, Math.min(360, deg)) / 360);
+    this.requestRender();
   };
 
   View3D.prototype.tick = function (now) {
@@ -352,8 +354,21 @@
       return Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y);
     }
 
+    var types = new Map();
+    function penDown() {
+      var found = false;
+      types.forEach(function (t) { if (t === 'pen') found = true; });
+      return found;
+    }
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     el.addEventListener('pointerdown', function (e) {
       e.preventDefault();
+      // Apple Pencil が触れている間は、指の触れ（手のひら）を無視する
+      if (e.pointerType === 'touch' && penDown()) return;
+      if (e.pointerType === 'pen') {
+        types.forEach(function (t, id) { if (t === 'touch') { pointers.delete(id); types.delete(id); } });
+      }
+      types.set(e.pointerId, e.pointerType);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       try { el.setPointerCapture(e.pointerId); } catch (err) { /* 古いブラウザ */ }
       if (pointers.size === 2) pinchDist = pinchLength();
@@ -376,6 +391,7 @@
     });
     function up(e) {
       pointers.delete(e.pointerId);
+      types.delete(e.pointerId);
       if (pointers.size === 2) pinchDist = pinchLength();
     }
     el.addEventListener('pointerup', up);
