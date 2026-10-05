@@ -194,10 +194,13 @@
       while (body.firstChild) body.removeChild(body.firstChild);
       body.appendChild(cache[name]);
       // タブを変えたら、いちばん上から。指ではじいたスクロールが続いていても止める
+      // （スクロールできない状態を2コマのあいだ続けると、はじいた勢いが消える）
       body.style.overflowY = 'hidden';
       body.scrollTop = 0;
-      void body.offsetHeight;
-      body.style.overflowY = '';
+      var raf = root.requestAnimationFrame || function (f) { return setTimeout(f, 16); };
+      raf(function () {
+        raf(function () { body.scrollTop = 0; body.style.overflowY = ''; });
+      });
     }
     function open() {
       show(current);
