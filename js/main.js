@@ -36,7 +36,8 @@
     if (editor.mode === 'axis2') return say('軸が通る2つ目の点をタップしてください。', 'active');
     if (!editor.shape) return say('① 「三角形」「四角形」「円」のどれかを押して、図形を置きましょう。');
     if (!editor.axis) return say('② ●を動かすと形が変わります。次に「軸を引く」を押しましょう。');
-    say('③ 「回転させる」を押しましょう。（●や◆を動かして、図形や軸を変えることもできます）');
+    if (editor.snapState().fit) return say('緑の●は、軸にぴったり合っています。③ 「回転させる」を押しましょう。', 'fit');
+    say('③ 「回転させる」を押しましょう。（●を軸に近づけると、軸にぴったり吸い付きます）');
   }
 
   function updateButtons() {

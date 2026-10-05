@@ -46,6 +46,31 @@
   }
 
   /*
+   * 図形が軸のどちら側にあるか。
+   *   'pos'   … 全部が n の側（軸の上の点をふくむ）
+   *   'neg'   … 全部が n の反対側
+   *   'cross' … 軸が図形の内部を通る（軸をまたぐ）
+   * 「軸が図形の中を通る」かどうかの判定は、この関数だけで行う。
+   */
+  function axisSide(shape, f) {
+    if (shape.type === 'circle') {
+      var d = toTR(f, shape.c)[1];
+      // 中心から軸までの距離が半径より短い → 軸が円の内部を通る（接する場合は可）
+      if (Math.abs(d) < shape.r - EPS) return 'cross';
+      return d < 0 ? 'neg' : 'pos';
+    }
+    var maxR = -Infinity, minR = Infinity;
+    shape.pts.forEach(function (p) {
+      var r = toTR(f, p)[1];
+      maxR = Math.max(maxR, r); minR = Math.min(minR, r);
+    });
+    // 頂点が軸の両側にある → 軸が図形の内部を通る
+    // （多角形は頂点を囲む範囲に入っているので、頂点を調べれば十分）
+    if (maxR > EPS && minR < -EPS) return 'cross';
+    return maxR <= EPS ? 'neg' : 'pos';
+  }
+
+  /*
    * 図形と軸を調べ、回転体をつくれるか判定して、輪郭（部品の集まり）を返す。
    *   shape: { type: 'polygon', pts: [{x,y}, ...] }  または { type: 'circle', c: {x,y}, r }
    *   axis:  { p1: {x,y}, p2: {x,y} }
@@ -58,15 +83,15 @@
     var f = axisFrame(axis);
     if (!f) return { ok: false, reason: 'noAxis', message: '軸の2つの点がかさなっています。軸を引き直してください。' };
 
+    var side = axisSide(shape, f);
+    // 軸をまたぐ図形は、まだ立体にできない（対応したら ALLOW_AXIS_CROSSING を true にし、ここで別の作り方に進む）
+    if (side === 'cross' && !Rev.ALLOW_AXIS_CROSSING) return { ok: false, reason: 'inside', message: MSG_INSIDE };
+    if (side === 'neg') flipSide(f);   // 図形がある側を n の向きにそろえる（r ≥ 0）
+
     var pieces = [];
 
     if (shape.type === 'circle') {
       var c = toTR(f, shape.c);
-      var d = c[1];
-      // 中心から軸までの距離が半径より短い → 軸が円の内部を通る（接する場合は可）
-      if (Math.abs(d) < shape.r - EPS) return { ok: false, reason: 'inside', message: MSG_INSIDE };
-      if (d < 0) flipSide(f);
-      c = toTR(f, shape.c);
       var pts = [], nrm = [];
       for (var i = 0; i <= CIRCLE_SAMPLES; i++) {
         var a = (i % CIRCLE_SAMPLES) / CIRCLE_SAMPLES * Math.PI * 2;
@@ -76,17 +101,10 @@
       }
       pieces.push({ pts: pts, nrm: nrm });
     } else {
-      var tr = shape.pts.map(function (p) { return toTR(f, p); });
-      var maxR = -Infinity, minR = Infinity;
-      tr.forEach(function (q) { maxR = Math.max(maxR, q[1]); minR = Math.min(minR, q[1]); });
-      // 頂点が軸の両側にある → 軸が図形の内部を通る
-      // （多角形は頂点を囲む範囲に入っているので、頂点を調べれば十分）
-      if (maxR > EPS && minR < -EPS) return { ok: false, reason: 'inside', message: MSG_INSIDE };
-      if (maxR <= EPS) {
-        flipSide(f);
-        tr = shape.pts.map(function (p) { return toTR(f, p); });
-      }
-      tr = tr.map(function (q) { return [q[0], Math.abs(q[1]) < EPS ? 0 : q[1]]; });
+      var tr = shape.pts.map(function (p) {
+        var q = toTR(f, p);
+        return [q[0], Math.abs(q[1]) < EPS ? 0 : q[1]];
+      });
       // (t, r) 平面で反時計回りにそろえると、各辺の外向き法線が (dr, -dt) になる
       if (signedArea(tr) < 0) tr.reverse();
       for (var k = 0; k < tr.length; k++) {
@@ -193,10 +211,13 @@
   }
 
   var Rev = {
+    // 軸が図形の内部を通る（軸をまたぐ）図形の回転に対応したら true にする
+    ALLOW_AXIS_CROSSING: false,
     EPS: EPS,
     SEGMENTS: SEGMENTS,
     MSG_INSIDE: MSG_INSIDE,
     axisFrame: axisFrame,
+    axisSide: axisSide,
     analyze: analyze,
     buildSurface: buildSurface,
     meshVolume: meshVolume,
