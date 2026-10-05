@@ -23,6 +23,10 @@
   var CONFIG = {
     MIN_STROKE_PX: 12,          // これより短い線は、ただのタップとみなして何もしない
     DEDUP_PX: 1,                // これより近い点は1つにまとめる
+    FEED_RECENT: 32,            // 点の受け取り：直前に使ったこの数の点と同じ位置の点は、もう一度は使わない
+    BACKTRACK_EPS_PX: 1.5,      // 戻りを取り除く：少し前に通った点からこの距離以内に戻ったら、その間を取り除く
+    BACKTRACK_PX: 60,           //                 「少し前」＝線に沿ってこの長さ以内
+    SMALL_LOOP_PX2: 100,        // 閉じた線の中の、これより面積が小さい輪（約10px 四方）は切り取る（ペンを離すときのはねなど）
     CLOSE_PX: 36,               // ① 終点が始点からこの距離以内なら閉じる（指の太さを考えて広め）
     HEAD_TAIL_FRACTION: 0.3,    // ② 交わりを探す「かき始め」「かき終わり」の長さ（線全体に対する割合）
     AXIS_PX: 20,                // ③ 両端が軸からこの距離以内なら、軸に乗せて閉じる（吸い付きと同じ）
@@ -42,7 +46,7 @@
   };
 
   var MSG = {
-    selfCross: '線が交わらないようにかこう。',
+    selfCross: '線が交わらないようにかこう。○の所で交わっています。',
     tooSmall: 'もう少し大きくかこう。'
   };
 
@@ -75,6 +79,40 @@
     return { p: P(a.x + rx * t, a.y + ry * t), t: t, u: u };
   }
 
+  /* ---------- 0. 点の受け取り（画面側から、指・ペンが動くたびに呼ぶ） ---------- */
+
+  /*
+   * iPad の Safari は、ペンの細かい点（getCoalescedEvents）に、前の回に渡した点をもう一度混ぜることがある
+   * （A, B, A, C, D, C … のように、線が少し戻ってはまた進む）。Apple Pencil は1秒に240回点をとるので、
+   * 1回に渡される点が多く、戻りが大きくなって「線が交わる」と判定されてしまう。
+   * そこで、時刻が前の点より古い点と、直前に使った点と同じ位置の点は捨てる（時刻が当てにならない場合にもそなえる）。
+   *   state: newFeed() で作る、events: [{ x, y, t }]（t は時刻。分からないときは 0 や NaN でよい）
+   *   戻り値: 新しく使う点の並び（時刻の順）
+   */
+  function newFeed() { return { t: -Infinity, recent: [] }; }
+
+  function acceptPoints(state, events) {
+    var evs = events.map(function (e, k) { return { e: e, k: k, t: isFinite(e.t) && e.t > 0 ? e.t : null }; });
+    evs.sort(function (a, b) {   // 時刻の順（時刻が分からない点は、渡された順のまま）
+      if (a.t !== null && b.t !== null && a.t !== b.t) return a.t - b.t;
+      return a.k - b.k;
+    });
+    var out = [];
+    evs.forEach(function (v) {
+      if (v.t !== null && v.t < state.t) return;   // 前の点より古い
+      var p = v.e;
+      for (var i = 0; i < state.recent.length; i++) {
+        var q = state.recent[i];
+        if (Math.abs(q.x - p.x) < 1e-6 && Math.abs(q.y - p.y) < 1e-6) return;   // 直前に使った点と同じ
+      }
+      state.recent.push({ x: p.x, y: p.y });
+      if (state.recent.length > CONFIG.FEED_RECENT) state.recent.shift();
+      if (v.t !== null) state.t = Math.max(state.t, v.t);
+      out.push(P(p.x, p.y));
+    });
+    return out;
+  }
+
   /* ---------- 1. 下ごしらえ ---------- */
 
   function dedup(pts, minD) {
@@ -83,6 +121,55 @@
       if (!out.length || dist(out[out.length - 1], p) >= minD) out.push(P(p.x, p.y));
     });
     return out;
+  }
+
+  /*
+   * 戻りを取り除く：少し前（線に沿って maxBack 以内）に通った点の近く（eps 以内）に戻ってきたら、
+   * その間（行って戻った部分）を取り除く。ペンの点の戻り・はね・とがった戻りがこれにあたる。
+   */
+  function removeBacktracks(pts, eps, maxBack) {
+    var out = [], cum = [];
+    pts.forEach(function (p) {
+      var back = -1;
+      for (var k = out.length - 2; k >= 0; k--) {
+        if (cum[out.length - 1] - cum[k] > maxBack) break;
+        if (dist(out[k], p) <= eps) back = k;
+      }
+      if (back >= 0) { out.length = back + 1; cum.length = back + 1; return; }
+      cum.push(out.length ? cum[out.length - 1] + dist(out[out.length - 1], p) : 0);
+      out.push(p);
+    });
+    return out;
+  }
+
+  /*
+   * 閉じた線の中の小さな輪を切り取る（交わった所の点で置きかえる）。
+   * fixed は位置を変えない点の印（軸に乗せた点など）。切り取った後の { pts, fixed } を返す。
+   */
+  function removeSmallLoops(pts, fixed, maxArea) {
+    var items = pts.map(function (p, i) { return { p: p, f: !!fixed[i] }; });
+    for (var guard = 0; guard < 200; guard++) {
+      var n = items.length, cut = null;
+      for (var i = 0; i < n && !cut; i++) {
+        for (var j = i + 2; j < n && !cut; j++) {
+          if (i === 0 && j === n - 1) continue;
+          var x = segmentCross(items[i].p, items[(i + 1) % n].p, items[j].p, items[(j + 1) % n].p);
+          if (!x) continue;
+          var inner = items.slice(i + 1, j + 1), outer = items.slice(j + 1).concat(items.slice(0, i + 1));
+          var aIn = Math.abs(area([x.p].concat(inner.map(function (q) { return q.p; }))));
+          var aOut = Math.abs(area([x.p].concat(outer.map(function (q) { return q.p; }))));
+          var innerSmall = aIn <= aOut;
+          if (Math.min(aIn, aOut) <= maxArea && !(innerSmall ? inner : outer).some(function (q) { return q.f; })) {
+            cut = { i: i, j: j, p: x.p, inner: innerSmall };
+          }
+        }
+      }
+      if (!cut) break;
+      var X = { p: cut.p, f: false };
+      if (cut.inner) items = items.slice(0, cut.i + 1).concat([X], items.slice(cut.j + 1));
+      else items = [X].concat(items.slice(cut.i + 1, cut.j + 1));
+    }
+    return { pts: items.map(function (q) { return q.p; }), fixed: items.map(function (q) { return q.f; }) };
   }
 
   function cumulative(pts) {
@@ -319,15 +406,17 @@
 
   /* ---------- 7. かき直しの判定 ---------- */
 
+  /* 閉じた線が自分と交わっていれば、その交わる点 { p } を返す（交わらなければ null） */
   function selfCrossing(pts) {
     var n = pts.length;
     for (var i = 0; i < n; i++) {
       for (var j = i + 2; j < n; j++) {
         if (i === 0 && j === n - 1) continue;   // となりどうしの辺
-        if (segmentCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return true;
+        var x = segmentCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n]);
+        if (x) return { p: x.p };
       }
     }
-    return false;
+    return null;
   }
 
   /* ---------- まとめ ---------- */
@@ -342,9 +431,17 @@
     var u = 1 / ctx.scale;
     var pts = dedup(raw, CONFIG.DEDUP_PX * u);
     if (pts.length < 3 || cumulative(pts)[pts.length - 1] < CONFIG.MIN_STROKE_PX * u) return { ok: false, reason: 'tap' };
+    // 行って戻った部分（ペンの点の戻り・はね）を取り除く
+    pts = removeBacktracks(pts, CONFIG.BACKTRACK_EPS_PX * u, CONFIG.BACKTRACK_PX * u);
+    if (pts.length < 3) return { ok: false, reason: 'tap' };
 
     var closed = closeStroke(pts, ctx);
-    var rs = resample(closed.poly, closed.fixed, CONFIG.RESAMPLE_PX * u);
+    // 閉じた線の中の小さな輪（ペンを離すときのはねなど）を切り取る
+    var fixedFlags = closed.poly.map(function (p, i) { return closed.fixed.indexOf(i) >= 0; });
+    var cleaned = removeSmallLoops(closed.poly, fixedFlags, CONFIG.SMALL_LOOP_PX2 * u * u);
+    var fixedIdx = [];
+    cleaned.fixed.forEach(function (f, i) { if (f) fixedIdx.push(i); });
+    var rs = resample(cleaned.pts, fixedIdx, CONFIG.RESAMPLE_PX * u);
     // 角は、軽くならした線で探す（強いぶれを角とまちがえないように）
     var probe = smooth(rs.pts, rs.fixed, CONFIG.CORNER_PROBE_PASSES);
     var corners = detectCorners(probe, rs.fixed, CONFIG.CORNER_REACH_PX * u);
@@ -364,7 +461,8 @@
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
     });
     if (simple.pts.length < 3 || Math.max(maxX - minX, maxY - minY) * ctx.scale < CONFIG.MIN_SIZE_PX) return tooSmall;
-    if (selfCrossing(simple.pts)) return { ok: false, reason: 'selfCross', message: MSG.selfCross };
+    var crossing = selfCrossing(simple.pts);
+    if (crossing) return { ok: false, reason: 'selfCross', message: MSG.selfCross, at: crossing.p };
     var a = Math.abs(area(simple.pts)), per = perimeter(simple.pts);
     var areaPx = a * ctx.scale * ctx.scale, roundness = per > 0 ? 4 * Math.PI * a / (per * per) : 0;
     if (areaPx < CONFIG.MIN_AREA_PX || roundness < CONFIG.MIN_ROUNDNESS) return tooSmall;
@@ -381,6 +479,8 @@
     CONFIG: CONFIG,
     MSG: MSG,
     finish: finish,
+    newFeed: newFeed,
+    acceptPoints: acceptPoints,
     // 将来の補正（三角形・円などにきれいに整える）を入れる一覧。
     // 各要素は function ({ pts, corners, closure }, ctx) → { pts, corners }（補正しないときは null）
     recognizers: [],
