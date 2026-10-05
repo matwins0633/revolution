@@ -283,11 +283,17 @@ html, body {
   display: flex;
   flex-direction: column;
   margin-top: auto;
-  padding-top: 10px;
+  padding-top: 6px;
 }
+/* 元に戻す：すすむ ＝ 2：1 の横幅で、高さは同じ */
+.history-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 6px; }
+.history-row .btn { padding-left: 3px; padding-right: 3px; gap: 3px; font-size: 15px; white-space: nowrap; }
+.history-row .icon { width: 18px; height: 18px; }
+.erase-col { display: flex; flex-direction: column; gap: 6px; }
+#btn-clear .icon { color: var(--axis); }   /* 全部消す：ごみ箱のアイコンだけ赤（文字は控えめなまま） */
 .sep {
   width: 100%;
-  margin: 12px 0;
+  margin: 8px 0;
   border: none;
   border-top: 1px solid var(--line);
 }
@@ -452,8 +458,8 @@ input[type="range"]:disabled { opacity: 0.4; }
 input[type="range"]:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; border-radius: 6px; }
 
 /* 高さの少ない横向きの画面（iPad 横 1024×768 など）では、手順の列を少しつめる */
-@media (orientation: landscape) and (max-height: 740px) {
-  .title { font-size: 17px; margin-bottom: 4px; }
+@media (orientation: landscape) and (max-height: 800px) {
+  .title { display: none; }
   .tips li { min-height: 21px; }
   .step { padding-top: 4px; padding-bottom: 6px; }
   .step-head { margin-bottom: 4px; }
@@ -519,6 +525,8 @@ input[type="range"]:focus-visible { outline: 3px solid var(--ink); outline-offse
     padding: 0;
   }
   .sep { width: 1px; height: 32px; margin: 0 8px; border-top: none; border-left: 1px solid var(--line); }
+  .history-row { display: flex; }
+  .erase-col { flex-direction: row; }
 }
 
 /* スマホなど：ページのスクロールだけは許す */

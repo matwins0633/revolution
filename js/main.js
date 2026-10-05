@@ -47,10 +47,10 @@
   });
 
   var editor = new Editor2D($('canvas2d'), {
-    onChange: function () {
+    onChange: function (what) {
       view.setScene(editor.shape, editor.axis);   // 図形や軸が変わったら、できていた立体は消える
       phase = 'idle';
-      notice = null;
+      notice = what === 'flipAxis' ? { text: '軸を対称の軸にして裏返しました。', kind: '' } : null;
       refresh();
     },
     onModeChange: function () { notice = null; refresh(); },
@@ -103,6 +103,8 @@
     $('btn-draw').setAttribute('aria-pressed', editor.mode === 'draw' ? 'true' : 'false');
     $('draw-label').textContent = editor.shape && editor.shape.type === 'freehand' ? 'フリーハンドでかき直す' : 'フリーハンドでかく';
     $('btn-undo').disabled = !editor.canUndo();
+    $('btn-redo').disabled = !editor.canRedo();
+    $('btn-clear-shape').disabled = !editor.shape;
     $('btn-replay').disabled = !hasSolid;
     $('placeholder3d').hidden = hasSolid;
     $('placeholder3d').classList.toggle('compact', !!(editor.shape || editor.axis));
@@ -164,12 +166,15 @@
     }
     lastCrossing = result.crossing;
     hasMade = true;
+    notice = null;
     phase = 'rotating';
     view.play(result);
     refresh();
   });
 
   onPress($('btn-undo'), function () { editor.undo(); });
+  onPress($('btn-redo'), function () { editor.redo(); });
+  onPress($('btn-clear-shape'), function () { editor.clearShape(); });
   onPress($('btn-clear'), function () { editor.clear(); });
 
   /* ---------- 作図の場所 ---------- */
@@ -180,6 +185,7 @@
   /* ---------- 3Dの場所 ---------- */
 
   onPress($('btn-replay'), function () {
+    notice = null;
     phase = 'rotating';
     view.replay();
     refresh();

@@ -46,7 +46,9 @@
   // 回すつまみ・裏返すボタンの線画（ページの手順の列のアイコンと同じ形）
   var ICON = {
     turn: 'M19 12a7 7 0 1 1-2.05-4.95M19 4v4h-4',
-    flip: 'M12 3v18M9 7L4 17h5zM15 7l5 10h-5z'
+    flip: 'M12 3v18M9 7L4 17h5zM15 7l5 10h-5z',
+    flipSides: 'M9 7L4 17h5zM15 7l5 10h-5z',   // 軸で裏返すとき：まん中の線は軸の色の点線でかく
+    flipLine: 'M12 3v18'
   };
 
   function P(x, y) { return { x: x, y: y }; }
@@ -126,7 +128,8 @@
     this.axisPreview = null;   // 軸を引いている途中の予告
     this.selected = false;     // 図形が選ばれているか
     this.showFold = false;     // 「折り返しを見る」
-    this.history = [];         // 「元に戻す」のための記録
+    this.history = [];         // 「元に戻す」のための記録（変える直前の状態）
+    this.future = [];          // 「すすむ」のための記録（元に戻す直前の状態）
     this.pointers = {};        // 画面に触れている指・ペン・マウス
     this.ignored = {};         // 無視している指（手のひら・3本目の指など）
     this.op = null;            // 今している操作
@@ -284,21 +287,37 @@
   Editor2D.prototype.record = function (json) {
     this.history.push(json || this.stateJSON());
     if (this.history.length > HISTORY_MAX) this.history.shift();
+    this.future = [];   // 元に戻したあとに新しい操作をしたら、それより先には「すすむ」できない
     if (this.cb.onHistory) this.cb.onHistory(this.canUndo());
   };
 
   Editor2D.prototype.canUndo = function () { return this.history.length > 0; };
+  Editor2D.prototype.canRedo = function () { return this.future.length > 0; };
 
-  Editor2D.prototype.undo = function () {
-    if (!this.history.length) return;
+  /* 記録した状態に移る（元に戻す・すすむ） */
+  Editor2D.prototype.restore = function (json, what) {
     this.abortOp();
-    var s = JSON.parse(this.history.pop());
+    var s = JSON.parse(json);
     this.shape = s.shape;
     this.axis = s.axis;
     if (!this.shape) this.selected = false;
     this.cancelAxis();
     if (this.cb.onHistory) this.cb.onHistory(this.canUndo());
-    this.changed('undo');
+    this.changed(what);
+  };
+
+  Editor2D.prototype.undo = function () {
+    if (!this.history.length) return;
+    this.future.push(this.stateJSON());
+    if (this.future.length > HISTORY_MAX) this.future.shift();
+    this.restore(this.history.pop(), 'undo');
+  };
+
+  Editor2D.prototype.redo = function () {
+    if (!this.future.length) return;
+    this.history.push(this.stateJSON());
+    if (this.history.length > HISTORY_MAX) this.history.shift();
+    this.restore(this.future.pop(), 'redo');
   };
 
   /* ---------- 図形と軸の操作（ボタンから呼ばれる） ---------- */
@@ -320,17 +339,41 @@
     this.changed('shape');
   };
 
-  /* 選ばれている図形を裏返す */
-  Editor2D.prototype.flipShape = function () {
-    if (!this.shape || this.shape.type === 'circle') return;
-    this.record();
-    this.shape = Transform.flip(this.shape);
-    this.changed('shape');
+  /* 選ばれている図形を裏返す（軸から離れていればその場で左右に、軸に接している・またぐときは軸で） */
+  Editor2D.prototype.flipMode = function () {
+    return this.shape ? Transform.flipMode(this.shape, this.axis) : null;
   };
 
-  /* フリーハンドでかく状態にする */
+  Editor2D.prototype.flipShape = function () {
+    var mode = this.flipMode();
+    if (!mode) return;
+    this.record();
+    this.shape = mode === 'axis' ? Transform.flipAcrossAxis(this.shape, this.axis) : Transform.flipInPlace(this.shape);
+    this.changed(mode === 'axis' ? 'flipAxis' : 'shape');
+  };
+
+  /* 図形だけを消す（軸は残す） */
+  Editor2D.prototype.clearShape = function () {
+    this.abortOp();
+    if (this.shape) {
+      this.record();
+      this.shape = null;
+      this.selected = false;
+    }
+    this.cancelAxis();
+    this.changed('clearShape');
+  };
+
+  /* フリーハンドでかく状態にする。前の図形の上に重ねてかくと「かき足し」に見えるので、今の図形は先に消す（元に戻すで戻せる） */
   Editor2D.prototype.startDraw = function () {
     this.abortOp();
+    if (this.shape) {
+      this.record();
+      this.shape = null;
+      this.selected = false;
+      this.flash = null;
+      if (this.cb.onChange) this.cb.onChange('clearShape');
+    }
     this.mode = 'draw';
     this.pendingPoint = null;
     this.axisPreview = null;
@@ -399,7 +442,9 @@
     });
     var pad = 12;
     var frame = { left: minX - pad, right: maxX + pad, top: minY - pad, bottom: maxY + pad };
-    if (this.shape.type === 'circle') return { frame: frame };   // 円は回しても裏返しても同じなので、枠だけ
+    var flipMode = this.flipMode();   // null なら裏返すボタンを出さない（軸から離れた円）
+    var isCircle = this.shape.type === 'circle';   // 円は回しても同じなので、回すつまみは出さない
+    if (isCircle && !flipMode) return { frame: frame };
     function clampX(x) { return Math.max(26, Math.min(W - 26, x)); }
     function clampY(y) { return Math.max(26, Math.min(H - 26, y)); }
     var rx = (frame.left + frame.right) / 2, ry = frame.top - 34, below = false;
@@ -417,7 +462,8 @@
       }
       return q;
     }
-    return { frame: frame, rotate: clear(rot), flip: clear(flip), below: below };
+    if (isCircle) return { frame: frame, flip: clear(rot), flipMode: flipMode, below: below };
+    return { frame: frame, rotate: clear(rot), flip: clear(flip), flipMode: flipMode, below: below };
   };
 
   /* ---------- 指・ペン・マウスの操作 ---------- */
@@ -905,9 +951,9 @@
     });
     ctx.closePath();
     ctx.clip();
-    var mirrored = Rev.outline(this.shape).pts.map(function (p) {   // 軸で折り返した図形
-      var r = (p.x - f.A.x) * f.n.x + (p.y - f.A.y) * f.n.y;
-      return P(p.x - 2 * r * f.n.x, p.y - 2 * r * f.n.y);
+    var axis = this.axis;
+    var mirrored = Rev.outline(this.shape).pts.map(function (p) {   // 軸で折り返した図形（「軸で裏返す」と同じ計算）
+      return Transform.reflectAcrossAxis(p, axis);
     });
     ctx.beginPath();
     this.tracePath(mirrored);
@@ -1151,6 +1197,7 @@
   /* 「図形を回す」つまみと「裏返す」ボタン */
   Editor2D.prototype.drawSelectionButtons = function () {
     var ui = this.selectionUI();
+    if (ui.flip) this.drawFlipButton(ui.flip, ui.flipMode === 'axis');
     if (!ui.rotate) return;
     var ctx = this.ctx, f = ui.frame;
     var rotating = this.op && this.op.kind === 'edit' && this.op.hit && this.op.hit.kind === 'rotate';
@@ -1164,7 +1211,6 @@
     ctx.stroke();
     ctx.restore();
     this.drawRoundButton(ui.rotate, 'turn', rotating);
-    this.drawRoundButton(ui.flip, 'flip', false);
     if (rotating && this.op.angleDeg !== undefined) {   // 回した角度を表示
       ctx.save();
       ctx.font = '700 15px "Hiragino Sans", "BIZ UDPGothic", "Noto Sans JP", sans-serif';
@@ -1201,6 +1247,22 @@
     ctx.lineJoin = 'round';
     ctx.strokeStyle = active ? '#FFFFFF' : COLORS.ink;
     ctx.stroke(this.paths[icon]);
+    ctx.restore();
+  };
+
+  /* 裏返すボタン。軸で裏返すときは、まん中の線を軸の色（赤）の点線にする */
+  Editor2D.prototype.drawFlipButton = function (q, byAxis) {
+    if (!byAxis) return this.drawRoundButton(q, 'flip', false);
+    this.drawRoundButton(q, 'flipSides', false);
+    var ctx = this.ctx;
+    if (!this.paths.flipLine) this.paths.flipLine = new Path2D(ICON.flipLine);
+    ctx.save();
+    ctx.translate(q.x - 12 * 0.95, q.y - 12 * 0.95);
+    ctx.scale(0.95, 0.95);
+    ctx.lineWidth = 2.6;
+    ctx.setLineDash([3, 2.5]);
+    ctx.strokeStyle = COLORS.axis;
+    ctx.stroke(this.paths.flipLine);
     ctx.restore();
   };
 
