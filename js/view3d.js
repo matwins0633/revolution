@@ -125,17 +125,14 @@
 
   /* 平面図形（面と輪郭線）をつくる */
   View3D.prototype.makeShape = function (shape) {
+    var outline = root.Rev.outline(shape).pts;   // 円・半円は細かい多角形として
     var s = new THREE.Shape();
-    if (shape.type === 'polygon') {
-      s.moveTo(shape.pts[0].x, shape.pts[0].y);
-      for (var i = 1; i < shape.pts.length; i++) s.lineTo(shape.pts[i].x, shape.pts[i].y);
-      s.closePath();
-    } else {
-      s.absarc(shape.c.x, shape.c.y, shape.r, 0, Math.PI * 2, false);
-    }
+    s.moveTo(outline[0].x, outline[0].y);
+    for (var i = 1; i < outline.length; i++) s.lineTo(outline[i].x, outline[i].y);
+    s.closePath();
     var g = new THREE.Group();
-    g.add(new THREE.Mesh(new THREE.ShapeGeometry(s, 48), this.shapeMaterial));
-    var pts = s.getPoints(64).map(function (p) { return new THREE.Vector3(p.x, p.y, 0); });
+    g.add(new THREE.Mesh(new THREE.ShapeGeometry(s), this.shapeMaterial));
+    var pts = outline.map(function (p) { return new THREE.Vector3(p.x, p.y, 0); });
     g.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), this.edgeMaterial));
     return g;
   };
@@ -186,10 +183,7 @@
   };
 
   View3D.prototype.shapePoints = function (shape) {
-    if (!shape) return [];
-    if (shape.type === 'polygon') return shape.pts.slice();
-    var c = shape.c, r = shape.r;
-    return [{ x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y + r }];
+    return shape ? root.Rev.outline(shape).pts : [];
   };
 
   /* 点を軸に投影したときの範囲 */
@@ -200,10 +194,6 @@
       var t = (p.x - f.A.x) * f.u.x + (p.y - f.A.y) * f.u.y;
       lo = Math.min(lo, t); hi = Math.max(hi, t);
     });
-    if (this.shapeData && this.shapeData.type === 'circle') {
-      var c = this.shapeData.c, tc = (c.x - f.A.x) * f.u.x + (c.y - f.A.y) * f.u.y;
-      lo = Math.min(lo, tc - this.shapeData.r); hi = Math.max(hi, tc + this.shapeData.r);
-    }
     return [lo, hi];
   };
 

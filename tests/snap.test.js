@@ -97,12 +97,20 @@ console.log('円の半径の点');
   var close = Snap.snapRadiusHandle(P(1.1, 0.5), { c: P(1.2, 0), r: 1, a: 0 }, ctx(V));
   check('中心が軸に近すぎる（0.5 未満）ときは吸い付かない', !close.onAxis);
 
-  // 将来（軸をまたぐ図形に対応したとき）の動き：軸の上をすべり、接点に吸い付く
+  // 軸をまたぐ図形を回転できるとき（allowCrossing）の動き：軸の上をすべり、接点に吸い付く
   var cr = ctx(V, { allowCrossing: true });
-  var s1 = Snap.snapRadiusHandle(P(1.1, 2), circle, cr);
-  check('[将来] 軸の上をすべって半径が変わる', s1.onAxis && s1.target === 'slide' && Math.abs(s1.r - Math.sqrt(13)) < 1e-12, 'r=' + s1.r);
+  var s1 = Snap.snapRadiusHandle(P(1.1, 2.5), circle, cr);
+  check('[軸をまたぐ] 軸の上をすべって半径が変わる', s1.onAxis && s1.target === 'slide' && Math.abs(s1.r - Math.sqrt(15.25)) < 1e-12, 'r=' + s1.r);
   var s2 = Snap.snapRadiusHandle(P(1.1, 0.2), circle, cr);
-  check('[将来] 接点の近くでは接点に吸い付く', s2.onAxis && s2.target === 'tangent' && Math.abs(s2.r - 3) < 1e-12, 'r=' + s2.r);
+  check('[軸をまたぐ] 接点の近くでは接点に吸い付く', s2.onAxis && s2.target === 'tangent' && Math.abs(s2.r - 3) < 1e-12, 'r=' + s2.r);
+  var s3 = Snap.snapRadiusHandle(P(1.1, 2.1), circle, cr);
+  check('[軸をまたぐ] 軸上の方眼の交点にも吸い付く', s3.onAxis && s3.target === 'grid' && Math.abs(s3.r - Math.sqrt(13)) < 1e-12, 'r=' + s3.r + ' ' + s3.target);
+  var oc2 = { c: P(1, 3), r: 1, a: 0 };
+  var s4 = Snap.snapRadiusHandle(P(5.1, 2.4), oc2, ctx(O, { allowCrossing: true }));
+  var hp4 = P(oc2.c.x + s4.r * Math.cos(s4.a), oc2.c.y + s4.r * Math.sin(s4.a));
+  check('[軸をまたぐ] 斜めの軸の上をすべる（半径の点は軸の上）', s4.onAxis && onAxis(hp4, O) && s4.r > Math.sqrt(5), fmt(hp4) + ' r=' + s4.r);
+  var s5 = Snap.snapRadiusHandle(P(1.1, 1.6), { c: P(1, 0), r: 1, a: 0 }, cr);
+  check('[軸をまたぐ] 中心が軸の上の円でも、半径の点が軸の上をすべる', s5.onAxis && s5.target === 'slide' && Math.abs(s5.r - 1.6) < 1e-12, 'r=' + s5.r);
   check('吸い付く先の一覧に接点がある', Snap.radiusTargetsOnAxis(circle, ctx(V)).some(function (t) { return t.kind === 'tangent' && near(t.p, P(1, 0)); }));
 })();
 
@@ -114,6 +122,16 @@ console.log('円の中心');
   check('接したまま軸に沿ってすべる（交点の高さにも吸い付く）', b && near(b.c, P(2.5, 2)), b ? fmt(b.c) : 'null');
   check('軸から大きく離すと外れる', Snap.snapCircleCenter(P(3.2, 0), 1.5, ctx(V)) === null);
   check('軸に大きく近づけると外れる', Snap.snapCircleCenter(P(1.8, 0), 1.5, ctx(V)) === null);
+  var oa = Snap.snapCircleCenter(P(1.3, 0.6), 1.5, ctx(V));
+  check('中心を軸に近づけると、中心が軸の上に（回すと球）', oa && oa.kind === 'center' && near(oa.c, P(1, 0.6)), oa ? fmt(oa.c) : 'null');
+  var ob2 = Snap.snapCircleCenter(P(1.2, 2.05), 1.5, ctx(V));
+  check('中心が軸の上：軸上の方眼の交点を優先', ob2 && ob2.kind === 'center' && near(ob2.c, P(1, 2)), ob2 ? fmt(ob2.c) : 'null');
+  var small = Snap.snapCircleCenter(P(1.15, 0), 0.5, ctx(V));   // 中心まで 6px、接する位置まで 14px
+  check('小さい円：近い方（中心が軸の上）を選ぶ', small && small.kind === 'center', small ? small.kind : 'null');
+  var small2 = Snap.snapCircleCenter(P(1.4, 0), 0.5, ctx(V));   // 中心まで 16px、接する位置まで 4px
+  check('小さい円：近い方（接する位置）を選ぶ', small2 && small2.kind === 'tangent' && near(small2.c, P(1.5, 0)), small2 ? small2.kind : 'null');
+  var oo = Snap.snapCircleCenter(P(2.1, 0.9), 1, ctx(O));
+  check('斜めの軸の上に中心が乗る', oo && oo.kind === 'center' && onAxis(oo.c, O), oo ? fmt(oo.c) : 'null');
   var c = Snap.snapCircleCenter(P(-0.4, 0), 1.5, ctx(V));
   check('軸の反対側でも接する', c && near(c.c, P(-0.5, 0)), c ? fmt(c.c) : 'null');
   var n = P(-1 / Math.sqrt(5), 2 / Math.sqrt(5));

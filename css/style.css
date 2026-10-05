@@ -93,6 +93,10 @@ html, body {
 
 .btn.toggle[aria-pressed="true"] { background: #dbeafe; border-color: var(--primary); color: var(--primary-dark); }
 .btn.toggle[aria-pressed="true"]::before { content: "✓ "; }
+.btn[hidden] { display: none; }
+.btn.fold { background: #eef4ff; border-color: #a9c1f5; color: #1e40af; }
+.btn.fold[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }
+.message.info { background: #e8efff; color: #1e3a8a; font-weight: 700; }
 
 .message {
   margin: 0;

@@ -10,7 +10,7 @@
  *   gridSnap(p)   : 方眼の交点への吸い付き（省略時は四捨五入）
  *   inBounds(p)   : 画面の中に入っているか（省略時は常に true）
  *   maxR          : 円の半径の上限
- *   allowCrossing : 軸が図形の中を通ってもよいか（今は false。将来の拡張用）
+ *   allowCrossing : 軸が図形の中を通ってもよいか（true なら円の半径の点が軸の上をすべる）
  */
 (function (root) {
   'use strict';
@@ -109,23 +109,28 @@
 
   /*
    * 円の半径の点が吸い付く先（軸の上の特別な点）の一覧。
-   * 今は「接点」（中心から軸に下ろした垂線の足。円が軸に接する位置）だけ。
-   * 将来、半径の点が軸の上をすべるようになったら、ここに軸上の方眼の交点なども加えられる。
+   *   接点（中心から軸に下ろした垂線の足。円が軸に接する位置）と、
+   *   near が渡されたときは、その近くにある軸上の方眼の交点。
    */
-  function radiusTargetsOnAxis(circle, ctx) {
-    return [{ p: footOnAxis(circle.c, ctx.axis), kind: 'tangent' }];
+  function radiusTargetsOnAxis(circle, ctx, near) {
+    var list = [{ p: footOnAxis(circle.c, ctx.axis), kind: 'tangent' }];
+    if (near) {
+      var lat = latticeOnAxisNear(near, ctx.axis);
+      if (lat) list.push({ p: lat, kind: 'grid' });
+    }
+    return list;
   }
 
   /* 半径の点が軸に吸い付いたとき、軸の上のどこに置くか */
   function radiusPositionOnAxis(raw, circle, ctx) {
-    var targets = radiusTargetsOnAxis(circle, ctx);
-    if (!ctx.allowCrossing) return targets[0];   // 今は軸をまたげないので、必ず接点
-    // 将来：軸の上をすべり、近くに吸い付く先があればそこに
     var foot = footOnAxis(raw, ctx.axis);
-    var best = { p: foot, kind: 'slide' }, bestD = GRID_ON_AXIS_PX;
-    targets.forEach(function (tg) {
+    var targets = radiusTargetsOnAxis(circle, ctx, foot);
+    if (!ctx.allowCrossing) return targets[0];   // 軸をまたげないときは、必ず接点
+    // 軸の上をすべり、近くに吸い付く先（接点を優先）があればそこに
+    var best = { p: foot, kind: 'slide' }, bestD = GRID_ON_AXIS_PX + 1e-9;
+    targets.forEach(function (tg) {   // 同じ近さなら、先にある接点を選ぶ
       var d = dist(foot, tg.p) * ctx.scale;
-      if (d <= bestD) { bestD = d; best = tg; }
+      if (d < bestD) { bestD = d; best = tg; }
     });
     return best;
   }
@@ -156,20 +161,24 @@
 
   /*
    * 円の中心の吸い付き（中心のドラッグ・円全体の平行移動）
-   *   円が軸に接する位置から SNAP_PX 以内なら、接する位置に乗せる（接したまま軸に沿ってすべる）。
-   * 戻り値 { c, tangent: true }。吸い付かないときは null。
+   *   中心が軸から SNAP_PX 以内 → 中心を軸の上に（回すと球）
+   *   円が軸に接する位置から SNAP_PX 以内 → 接する位置に（接したまま軸に沿ってすべる）
+   *   両方にあてはまるときは近い方。
+   * 戻り値 { c, kind: 'center' | 'tangent' }。吸い付かないときは null。
    */
   function snapCircleCenter(rawC, r, ctx) {
     if (!ctx.axis) return null;
     var s = signedDist(rawC, ctx.axis);
-    if (Math.abs(Math.abs(s) - r) * ctx.scale > SNAP_PX) return null;
+    var dCenter = Math.abs(s) * ctx.scale, dTangent = Math.abs(Math.abs(s) - r) * ctx.scale;
+    if (Math.min(dCenter, dTangent) > SNAP_PX) return null;
     var f = frame(ctx.axis), side = s >= 0 ? 1 : -1;
     var foot = footOnAxis(rawC, ctx.axis);
     var lat = latticeOnAxisNear(rawC, ctx.axis);
     if (lat && dist(foot, lat) * ctx.scale <= GRID_ON_AXIS_PX) foot = lat;
-    var c = P(foot.x + f.n.x * side * r, foot.y + f.n.y * side * r);
+    var off = dCenter <= dTangent ? 0 : r;
+    var c = P(foot.x + f.n.x * side * off, foot.y + f.n.y * side * off);
     if (!inBounds(c, ctx)) return null;
-    return { c: c, tangent: true };
+    return { c: c, kind: off === 0 ? 'center' : 'tangent' };
   }
 
   var Snap = {

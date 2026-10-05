@@ -3,6 +3,7 @@
  *
  * 座標は「1ます = 1」。頂点・円の中心・軸の点は方眼の交点に、円の半径は 0.5 ます刻みに吸いつく。
  * 軸を引いたあとは、図形の点が軸にも吸い付く（計算は snap.js）。
+ * 図形は 三角形・四角形（type 'polygon'）、円（'circle'）、半円（'semicircle'、直径の両端 pts と弧の側 side）。
  * 指・タッチペン・マウスは、すべて Pointer Events で同じように扱う。
  */
 (function (root) {
@@ -20,10 +21,14 @@
     handle: '#ffffff',
     axis: '#dc2626',
     fit: '#16a34a',                        // 軸にぴったり合った点
-    fitGlow: 'rgba(22, 163, 74, 0.25)'
+    fitGlow: 'rgba(22, 163, 74, 0.25)',
+    foldFill: 'rgba(59, 130, 246, 0.38)',   // 軸で折り返した部分
+    foldLine: '#2563eb',
+    foldEdge: '#1e40af'                    // 折り返して重ねた形の輪郭（回すと立体の表面になる線）
   };
   var SAME_EPS = 1e-6;
   var Snap = root.Snap;
+  var Rev = root.Rev;
 
   function P(x, y) { return { x: x, y: y }; }
   function clonePts(pts) { return pts.map(function (p) { return P(p.x, p.y); }); }
@@ -90,6 +95,7 @@
     this.pendingPoint = null;  // 軸の1つ目の点
     this.drag = null;
     this.hover = null;
+    this.showFold = false;     // 「折り返しを見る」
     this.width = 0;
     this.height = 0;
     this.scale = 30;
@@ -163,8 +169,28 @@
   Editor2D.prototype.snapState = function () {
     var sh = this.shape, axis = this.axis;
     if (!sh || !axis) return { fit: false };
-    if (sh.type === 'polygon') return { fit: sh.pts.some(function (p) { return Snap.isOnAxis(p, axis); }) };
-    return { fit: Snap.isTangent(sh, axis) };
+    if (sh.type !== 'circle') return { fit: sh.pts.some(function (p) { return Snap.isOnAxis(p, axis); }) };
+    return { fit: Snap.isTangent(sh, axis) || Snap.isOnAxis(sh.c, axis) || Snap.isOnAxis(radiusPoint(sh), axis) };
+  };
+
+  /* 軸が図形の中を通っているか */
+  Editor2D.prototype.isCrossing = function () {
+    if (!this.shape || !this.axis) return false;
+    var f = Rev.axisFrame(this.axis);
+    return !!f && Rev.axisSide(this.shape, f) === 'cross';
+  };
+
+  /* 「折り返しを見る」の切り替え */
+  Editor2D.prototype.setShowFold = function (on) {
+    this.showFold = on;
+    this.draw();
+  };
+
+  /* 半円の弧を反対側にする */
+  Editor2D.prototype.flipArc = function () {
+    if (!this.shape || this.shape.type !== 'semicircle') return;
+    this.shape.side = -this.shape.side;
+    this.changed('shape');
   };
 
   Editor2D.prototype.eventWorld = function (e) {
@@ -179,6 +205,9 @@
       this.shape = { type: 'polygon', kind: kind, pts: [P(1, -2), P(4, -2), P(1, 2)] };
     } else if (kind === 'quad') {
       this.shape = { type: 'polygon', kind: kind, pts: [P(1, -2), P(4, -2), P(4, 2), P(1, 2)] };
+    } else if (kind === 'semicircle') {
+      // 直径は縦、弧は右側（side は p1→p2 の向きの左側なら +1）
+      this.shape = { type: 'semicircle', kind: kind, pts: [P(1, -2), P(1, 2)], side: -1 };
     } else {
       this.shape = { type: 'circle', kind: 'circle', c: P(3, 0), r: 1.5, a: 0 };
     }
@@ -228,7 +257,7 @@
       if (d < bestD) { bestD = d; best = info; }
     }
     if (this.shape) {
-      if (this.shape.type === 'polygon') {
+      if (this.shape.type !== 'circle') {
         this.shape.pts.forEach(function (p, i) { consider(p, { kind: 'vertex', index: i }); });
       } else {
         consider(this.shape.c, { kind: 'center' });
@@ -242,7 +271,7 @@
     }
     if (best) return best;
     if (this.shape) {
-      if (this.shape.type === 'polygon' ? pointInPolygon(w, this.shape.pts)
+      if (this.shape.type !== 'circle' ? pointInPolygon(w, Rev.outline(this.shape).pts)
         : Math.hypot(w.x - this.shape.c.x, w.y - this.shape.c.y) <= this.shape.r) {
         return { kind: 'move' };
       }
@@ -316,7 +345,7 @@
     var gridOff = P(Math.round(raw.x), Math.round(raw.y));   // 方眼の目の数だけずらす量
     var snapped = false;
 
-    if (orig.type === 'polygon') {
+    if (orig.type !== 'circle') {
       var pts;
       if (hit.kind === 'vertex') {
         var sv = Snap.snapVertex(w, ctx);
@@ -325,10 +354,13 @@
         snapped = sv.onAxis;
       } else {
         var st = Snap.snapTranslation(orig.pts, raw, ctx);
-        pts = st ? st.pts : this.clampMove(clonePts(orig.pts), gridOff);
+        pts = st ? st.pts : this.clampMove(clonePts(orig.pts), gridOff, Rev.outline(orig).pts);
         snapped = !!st;
       }
-      if (isValidPolygon(pts) && !samePts(pts, this.shape.pts)) {
+      var valid = orig.type === 'semicircle'
+        ? Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y) >= 1 - 1e-9   // 直径は1ます以上
+        : isValidPolygon(pts);
+      if (valid && !samePts(pts, this.shape.pts)) {
         this.shape.pts = pts;
         moved = true;
       }
@@ -351,11 +383,11 @@
     if (moved) this.changed('shape'); else this.draw();
   };
 
-  /* 図形が画面の外に出ないように、平行移動の量を調整する */
-  Editor2D.prototype.clampMove = function (pts, off) {
+  /* 図形が画面の外に出ないように、平行移動の量を調整する（extent：はみ出しを調べる点。省略時は pts） */
+  Editor2D.prototype.clampMove = function (pts, off, extent) {
     var L = this.limits();
     var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    pts.forEach(function (p) {
+    (extent || pts).forEach(function (p) {
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
       minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
     });
@@ -402,6 +434,7 @@
 
     // 図形の面 → 軸 → つまみ の順にかく（つまみが軸の線にかくれないように）
     if (this.shape) this.drawShapeBody();
+    if (this.showFold) this.drawFold();
     if (this.axis) this.drawAxis(this.axis.p1, this.axis.p2);
     if (this.shape && this.mode === 'edit') this.drawShapeHandles();   // 軸を引いている間は、つまみを出さない
     if (this.pendingPoint) this.drawDiamond(this.pendingPoint, true);
@@ -410,12 +443,8 @@
   Editor2D.prototype.drawShapeBody = function () {
     var ctx = this.ctx, sh = this.shape, self = this;
     ctx.beginPath();
-    if (sh.type === 'polygon') {
-      sh.pts.forEach(function (p, i) {
-        var q = self.toScreen(p);
-        if (i === 0) ctx.moveTo(q.x, q.y); else ctx.lineTo(q.x, q.y);
-      });
-      ctx.closePath();
+    if (sh.type !== 'circle') {
+      this.tracePath(Rev.outline(sh).pts);
     } else {
       var c = this.toScreen(sh.c);
       ctx.arc(c.x, c.y, sh.r * this.scale, 0, Math.PI * 2);
@@ -428,9 +457,66 @@
     ctx.stroke();
   };
 
+  Editor2D.prototype.tracePath = function (pts) {
+    var ctx = this.ctx, self = this;
+    pts.forEach(function (p, i) {
+      var q = self.toScreen(p);
+      if (i === 0) ctx.moveTo(q.x, q.y); else ctx.lineTo(q.x, q.y);
+    });
+    ctx.closePath();
+  };
+
+  /*
+   * 「折り返しを見る」：軸の反対側の部分を折り返した像（薄い青）と、
+   * 折り返して重ねた形の輪郭（濃い青。回すと立体の表面になる線）をかく。
+   */
+  Editor2D.prototype.drawFold = function () {
+    if (!this.shape || !this.axis) return;
+    var an = Rev.analyze(this.shape, this.axis);
+    if (!an.ok || !an.crossing) return;
+    var f = an.frame, ctx = this.ctx, self = this, big = 1000;
+    function sp(t, rho) { return self.toScreen(Rev.toWorld(f, t, rho)); }
+
+    ctx.save();
+    ctx.beginPath();   // 表側（面積の大きい側）だけに描く
+    [[-big, 0], [big, 0], [big, big], [-big, big]].forEach(function (q, i) {
+      var s = sp(q[0], q[1]);
+      if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+    });
+    ctx.closePath();
+    ctx.clip();
+    var mirrored = Rev.outline(this.shape).pts.map(function (p) {   // 軸で折り返した図形
+      var r = (p.x - f.A.x) * f.n.x + (p.y - f.A.y) * f.n.y;
+      return P(p.x - 2 * r * f.n.x, p.y - 2 * r * f.n.y);
+    });
+    ctx.beginPath();
+    this.tracePath(mirrored);
+    ctx.fillStyle = COLORS.foldFill;
+    ctx.fill();
+    ctx.setLineDash([7, 5]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = COLORS.foldLine;
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = COLORS.foldEdge;
+    ctx.beginPath();
+    an.pieces.forEach(function (pc) {
+      pc.pts.forEach(function (q, i) {
+        var s = sp(q[0], q[1]);
+        if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+      });
+    });
+    ctx.stroke();
+    ctx.restore();
+  };
+
   Editor2D.prototype.drawShapeHandles = function () {
     var ctx = this.ctx, sh = this.shape, self = this, axis = this.axis;
-    if (sh.type === 'polygon') {
+    if (sh.type !== 'circle') {
       sh.pts.forEach(function (p, i) {
         self.drawHandle(p, 'vertex' + i, { fit: Snap.isOnAxis(p, axis) });
       });
@@ -448,8 +534,8 @@
     var touch = tangent ? Snap.footOnAxis(sh.c, axis) : null;   // 円と軸が接する点
     var handleAtTouch = touch && Math.hypot(rp.x - touch.x, rp.y - touch.y) < 1e-6;
     if (touch && !handleAtTouch) this.drawFitDot(touch);
-    this.drawHandle(sh.c, 'center', { filled: true });
-    this.drawHandle(rp, 'radius', { fit: handleAtTouch });
+    this.drawHandle(sh.c, 'center', { filled: true, fit: Snap.isOnAxis(sh.c, axis) });
+    this.drawHandle(rp, 'radius', { fit: handleAtTouch || Snap.isOnAxis(rp, axis) });
   };
 
   Editor2D.prototype.isActive = function (key) {
