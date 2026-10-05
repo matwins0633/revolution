@@ -141,6 +141,7 @@
     this.customView = false;   // 拡大・縮小、移動をしたか
     this.avoid = null;         // つまみを置かない場所（「全体を表示」ボタンの場所。画面の座標）
     this.flash = null;         // 直線で閉じたとき、その直線をしばらく目立たせる { a, b, until }
+    this.crossMark = null;     // 線が交わってかき直しになったとき、交わった所とかいた線をしばらく見せる { at, stroke, until }
     this.foldCache = null;     // 「折り返しを見る」の計算結果（図形と軸が変わるまで使い回す）
     this.paths = {};
 
@@ -426,6 +427,7 @@
 
   Editor2D.prototype.changed = function (what) {
     if (what !== 'draw') this.flash = null;   // 直線で閉じた所の強調は、図形や軸が変わったら消す
+    this.crossMark = null;
     this.draw();
     if (this.cb.onChange) this.cb.onChange(what);
   };
@@ -578,6 +580,10 @@
       op.pts = [w];
       op.screen = [s];
       op.length = 0;
+      // 点の受け取り（iPad の Safari がペンの前の点を混ぜて渡しても、戻らないように。freehand.js）
+      op.feed = Freehand.newFeed();
+      Freehand.acceptPoints(op.feed, [{ x: s.x, y: s.y, t: 0 }]);
+      this.crossMark = null;
       this.op = op;
       this.draw();
       return;
@@ -622,8 +628,8 @@
     if (op.kind === 'draw') {
       // ペンの細かい動きもとれるように、ブラウザが用意している途中の点があれば使う
       var evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
-      if (!evs || !evs.length) evs = [e];
-      for (var k = 0; k < evs.length; k++) this.addStrokePoint(op, this.local(evs[k]));
+      evs = (evs && evs.length ? Array.prototype.slice.call(evs) : []).concat([e]);
+      this.feedStroke(op, evs);
       op.last = s;
       this.draw();
       return;
@@ -643,6 +649,13 @@
   };
 
   /* かいている線に点を加える（ほぼ同じ位置の点は加えない） */
+  /* 指・ペンの動きの点を、受け取りの判定（前の点・同じ点を捨てる）を通してから線に加える */
+  Editor2D.prototype.feedStroke = function (op, evs) {
+    var self = this;
+    var list = evs.map(function (ev) { var p = self.local(ev); return { x: p.x, y: p.y, t: ev.timeStamp }; });
+    Freehand.acceptPoints(op.feed, list).forEach(function (p) { self.addStrokePoint(op, p); });
+  };
+
   Editor2D.prototype.addStrokePoint = function (op, s) {
     var last = op.screen[op.screen.length - 1];
     var d = dist(s, last);
@@ -656,6 +669,11 @@
   Editor2D.prototype.finishStroke = function (op) {
     var res = Freehand.finish(op.pts, { axis: this.axis, scale: this.scale });
     if (!res.ok) {
+      if (res.reason === 'selfCross' && res.at) {   // 交わった所と、かいた線をしばらく見せる
+        var self = this, ms = Freehand.CONFIG.STRAIGHT_FLASH_MS;
+        this.crossMark = { at: res.at, stroke: op.pts.slice(), until: Date.now() + ms };
+        setTimeout(function () { if (self.crossMark && Date.now() >= self.crossMark.until) { self.crossMark = null; self.draw(); } }, ms + 30);
+      }
       this.draw();
       if (res.reason !== 'tap' && this.cb.onDrawResult) this.cb.onDrawResult(res);   // かき直し（かく状態のまま）
       return;
@@ -775,7 +793,7 @@
     this.op = null;
     var s = this.local(e), w = this.toWorld(s.x, s.y);
     if (op.kind === 'draw') {
-      this.addStrokePoint(op, s);
+      this.feedStroke(op, [e]);
       this.finishStroke(op);
       return;
     }
@@ -859,6 +877,7 @@
     }
     if (this.shape && editing && this.selected) this.drawSelectionButtons();
     if (this.flash) this.drawFlash();
+    if (this.crossMark) this.drawCrossMark();
     if (this.op && this.op.kind === 'draw') this.drawStroke(this.op);
     if (this.pendingPoint) this.drawDiamond(this.pendingPoint, true);
     if (this.axisPreview) {
@@ -1038,6 +1057,34 @@
   };
 
   /* 直線で閉じた所を、紺の点線でしばらく目立たせる */
+  /* 線が交わった所：かいた線をうすく残し、交わった所に点線の丸を出す */
+  Editor2D.prototype.drawCrossMark = function () {
+    var m = this.crossMark;
+    if (Date.now() >= m.until) { this.crossMark = null; return; }
+    var ctx = this.ctx, self = this;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = COLORS.stroke;
+    ctx.beginPath();
+    m.stroke.forEach(function (p, i) { var q = self.toScreen(p); if (i === 0) ctx.moveTo(q.x, q.y); else ctx.lineTo(q.x, q.y); });
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    var c = this.toScreen(m.at);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 18, 0, Math.PI * 2);
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.stroke();
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = COLORS.ink;
+    ctx.stroke();
+    ctx.restore();
+  };
+
   Editor2D.prototype.drawFlash = function () {
     if (Date.now() >= this.flash.until) { this.flash = null; return; }
     var ctx = this.ctx, a = this.toScreen(this.flash.a), b = this.toScreen(this.flash.b);

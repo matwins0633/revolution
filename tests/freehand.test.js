@@ -185,6 +185,103 @@ VARIANTS.forEach(function (v) {
   check(v[0] + '：軸から離した長方形 → 空洞の円柱', rel(h.v, hollow) < 0.05, h.v.toFixed(2) + ' / 公式 ' + hollow.toFixed(2) + '（' + (rel(h.v, hollow) * 100).toFixed(1) + '%）');
 });
 
+/*
+ * Safari（iPad）のペンの点をまねる。
+ * Apple Pencil は1秒に240回点をとり、ブラウザは1回の動きに数点ずつまとめて渡す（getCoalescedEvents）。
+ * Safari は、前の回に渡した点をもう一度混ぜて渡すことがある（A, B, A, C, D, C … のように戻る）。
+ *   pts: ほんとうの点の並び、batch: 1回に渡す点の数、repeat: 前の回からもう一度混ぜる点の数
+ *   sameTime: true のときは、1回の点の時刻をすべて同じにする（時刻が当てにならない場合）
+ * 戻り値: 1回ごとの点の並び [[{ x, y, t }]]
+ */
+function safariBatches(pts, batch, repeat, sameTime) {
+  var out = [], prev = [];
+  for (var i = 0; i < pts.length; i += batch) {
+    var cur = pts.slice(i, i + batch).map(function (p, k) { return { x: p.x, y: p.y, t: (i + k) * 4.17 }; });
+    var T = cur[cur.length - 1].t;
+    var ev = prev.slice(Math.max(0, prev.length - repeat)).concat(cur).map(function (q) { return { x: q.x, y: q.y, t: sameTime ? T : q.t }; });
+    out.push(ev);
+    prev = cur;
+  }
+  return out;
+}
+function naiveStream(batches) { return batches.reduce(function (a, b) { return a.concat(b); }, []); }
+function acceptedStream(batches) {
+  var st = Freehand.newFeed(), out = [];
+  batches.forEach(function (b) { out = out.concat(Freehand.acceptPoints(st, b)); });
+  return out;
+}
+function sameSeq(a, b) { return a.length === b.length && a.every(function (p, i) { return p.x === b[i].x && p.y === b[i].y; }); }
+
+console.log('ペンの点の受け取り（Safari の性質）');
+(function () {
+  // A, B, A, C, D, C の形
+  var A = P(0, 0), B = P(1, 0), C = P(2, 0), D = P(3, 0);
+  var st = Freehand.newFeed();
+  var got = [].concat(
+    Freehand.acceptPoints(st, [{ x: A.x, y: A.y, t: 1 }, { x: B.x, y: B.y, t: 2 }]),
+    Freehand.acceptPoints(st, [{ x: A.x, y: A.y, t: 1 }, { x: C.x, y: C.y, t: 3 }]),
+    Freehand.acceptPoints(st, [{ x: D.x, y: D.y, t: 4 }, { x: C.x, y: C.y, t: 3 }])
+  );
+  check('A, B, A, C, D, C → A, B, C, D（前の点を捨て、時刻の順に）', sameSeq(got, [A, B, C, D]), JSON.stringify(got));
+  var pen = stroke(circlePath(1, 0, 2, PI / 2, PI / 2 - 2 * PI * 0.95), 91, { jitter: 0.6, wobble: 0.8 });
+  [[4, 4, false], [6, 3, false], [8, 8, false], [6, 6, true], [8, 2, true]].forEach(function (c) {
+    var acc = acceptedStream(safariBatches(pen, c[0], c[1], c[2]));
+    check('1回に ' + c[0] + ' 点、前の点を ' + c[1] + ' 点混ぜる' + (c[2] ? '（時刻がすべて同じ）' : '') + '：ほんとうの点の並びにもどる（1点も捨てない）',
+      sameSeq(acc, pen), acc.length + ' / ' + pen.length);
+  });
+  var st2 = Freehand.newFeed();
+  var g2 = Freehand.acceptPoints(st2, [{ x: 1, y: 1, t: 0 }, { x: 2, y: 1, t: 0 }, { x: 3, y: 1, t: NaN }]);
+  check('時刻が分からない点（0・NaN）も、位置がちがえば使う', g2.length === 3);
+})();
+
+console.log('Safari のペンでかいた線が図形になる');
+(function () {
+  var axisV = { p1: P(0, -5), p2: P(0, 5) };
+  var cases = [
+    ['円に近い線（始点の近くで止める）', stroke(circlePath(3, 0, 2, PI / 2, PI / 2 - 2 * PI * 0.95), 92, { jitter: 0.8, wobble: 1 }), null, 'start'],
+    ['始点を通り越す線', stroke(circlePath(3, 0, 2, PI / 2, PI / 2 - 2 * PI * 1.08), 93, { jitter: 0.8, wobble: 1 }), null, 'cross'],
+    ['軸から軸への弧', (function () { var a = stroke(circlePath(0, 0, 2, PI / 2, -PI / 2), 94, { jitter: 0.8, wobble: 1 }); a[0] = P(6 * PX, 2); a[a.length - 1] = P(9 * PX, -2); return a; })(), axisV, 'axis']
+  ];
+  cases.forEach(function (c) {
+    [[6, 3], [8, 8]].forEach(function (b) {
+      var bs = safariBatches(c[1], b[0], b[1], false);
+      var r1 = Freehand.finish(acceptedStream(bs), { axis: c[2], scale: SCALE });
+      check(c[0] + '（1回に ' + b[0] + ' 点・' + b[1] + ' 点混ぜる）：受け取りを通すと図形になる', r1.ok && r1.closure === c[3], r1.ok ? r1.closure : r1.reason);
+      var r2 = Freehand.finish(naiveStream(bs), { axis: c[2], scale: SCALE });
+      check(c[0] + '（同上）：受け取りを通さなくても、戻りを取り除いて図形になる', r2.ok && r2.closure === c[3], r2.ok ? r2.closure : r2.reason);
+    });
+  });
+})();
+
+console.log('ペンを離すときのはね・小さな戻り');
+(function () {
+  var base = stroke(circlePath(3, 0, 2, PI / 2, PI / 2 - 2 * PI * 0.95), 95, { jitter: 0.6, wobble: 0.6 });
+  var L = base[base.length - 1];
+  var loop = base.slice();
+  for (var k = 1; k <= 12; k++) { var a = 2 * PI * k / 12; loop.push(P(L.x + 3 * PX * Math.sin(a), L.y + 3 * PX - 3 * PX * Math.cos(a))); }
+  var r = Freehand.finish(loop, { axis: null, scale: SCALE });
+  check('かき終わりに小さな輪（半径 3px）があっても図形になる', r.ok, r.ok ? r.closure : r.reason);
+  var hook = base.slice();
+  for (k = 1; k <= 8; k++) hook.push(P(L.x - k * 1.2 * PX, L.y + k * 0.9 * PX));
+  for (k = 1; k <= 8; k++) hook.push(P(L.x - (8 - k) * 1.2 * PX + k * 0.15 * PX, L.y + (8 - k) * 0.9 * PX));
+  r = Freehand.finish(hook, { axis: null, scale: SCALE });
+  check('かき終わりに「はね」（12px 行って戻る）があっても図形になる', r.ok, r.ok ? r.closure : r.reason);
+  var spiky = [];
+  base.forEach(function (p, i) {
+    spiky.push(p);
+    if (i % 40 === 20 && i + 5 < base.length) {   // 12px 先まで行って戻る
+      var q = base[i + 5], dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
+      spiky.push(P(p.x + dx / d * 12 * PX, p.y + dy / d * 12 * PX), P(p.x + dx / d * 0.5 * PX, p.y + dy / d * 0.5 * PX));
+    }
+  });
+  r = Freehand.finish(spiky, { axis: null, scale: SCALE });
+  check('とがった戻り（12px）が何か所もあっても図形になる', r.ok, r.ok ? r.closure : r.reason);
+  var eight = []; for (var i = 0; i <= 160; i++) { var t = 2 * PI * i / 160; eight.push(P(2.5 * Math.sin(t), 1.5 * Math.sin(2 * t))); }
+  r = Freehand.finish(eight, { axis: null, scale: SCALE });
+  check('本当の8の字は、今までどおりかき直し', !r.ok && r.reason === 'selfCross');
+  check('かき直しのときは、交わった場所が返される（8の字のまん中の近く）', !r.ok && r.at && Math.hypot(r.at.x, r.at.y) < 0.3, JSON.stringify(r.at));
+})();
+
 console.log('将来の補正の差し込み口');
 (function () {
   var called = 0;
