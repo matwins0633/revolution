@@ -222,6 +222,9 @@ html, body {
   gap: 6px;
 }
 .shape-grid .btn { min-height: 46px; padding: 4px 6px; gap: 5px; font-size: 15px; white-space: nowrap; }
+/* フリーハンドでかく：図形のボタン2つ分の横幅。かいている間は押された見た目 */
+.shape-grid .btn.draw { grid-column: 1 / -1; }
+.btn.draw[aria-pressed="true"] { border: 2px solid var(--shape); background: #FFF1E0; color: #7A3E04; }
 #btn-axis { width: 100%; }
 
 .tips {
@@ -312,6 +315,7 @@ html, body {
 }
 .message { flex: 1; margin: 0; font-size: 16px; line-height: 1.45; }
 .guide[data-kind="active"] { background: var(--axis-bg); color: #8E1622; }
+.guide[data-kind="draw"] { background: #FFF1E0; color: #7A3E04; }
 .guide[data-kind="info"] { background: var(--fold-bg); color: #163E8C; }
 .guide[data-kind="fit"],
 .guide[data-kind="done"] { background: var(--fit-bg); color: #0E5A2B; }
@@ -457,6 +461,8 @@ input[type="range"]:focus-visible { outline: 3px solid var(--ink); outline-offse
   .tips li { min-height: 22px; }
   .sep { margin: 8px 0; }
   .message { font-size: 15px; }
+  .shape-grid { gap: 5px; }
+  .shape-grid .btn { min-height: 44px; }
 }
 
 /* ---------- 縦向き（iPad 縦）や幅の狭い画面：手順の列を上の帯にして、作図と3Dを縦に並べる ---------- */
@@ -487,7 +493,8 @@ input[type="range"]:focus-visible { outline: 3px solid var(--ink); outline-offse
   }
   .cycle-step { padding-right: 8px; }
   .step-head { margin: 0; white-space: nowrap; }
-  .shape-grid { grid-template-columns: repeat(4, auto); }
+  .shape-grid { grid-template-columns: repeat(5, auto); }
+  .shape-grid .btn.draw { grid-column: auto; }
   .shape-grid .btn { padding: 4px 8px; }
   #btn-axis { width: auto; }
   .btn.primary { width: auto; padding: 6px 14px; }

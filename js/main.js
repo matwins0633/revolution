@@ -18,6 +18,19 @@
   var errorText = '';
   var lastCrossing = false;  // 最後につくった立体の図形が、軸をまたいでいたか
   var hasMade = false;       // 一度でも回転体をつくったか
+  var notice = null;         // フリーハンドでかいた直後の知らせ（次に何か変わるまで出す）{ text, kind }
+
+  /* フリーハンドでかいた線の閉じ方ごとの知らせ */
+  var CLOSURE_TEXT = {
+    start: '図形ができました。',
+    cross: 'はみ出した線を切って閉じました。',
+    axis: '線の両はしを軸に乗せて、軸と線で囲みました。',
+    straight: 'まっすぐな線で閉じました。ちがうときは「元に戻す」でかき直そう。'
+  };
+  function closureText(closure) {
+    if (closure === 'straight') return CLOSURE_TEXT.straight;
+    return CLOSURE_TEXT[closure] + (editor.axis ? '④「回転体をつくる」を押そう。' : '②「軸をひく」を押して、軸をひこう。');
+  }
 
   function say(text, kind) {
     messageEl.textContent = text;
@@ -37,14 +50,23 @@
     onChange: function () {
       view.setScene(editor.shape, editor.axis);   // 図形や軸が変わったら、できていた立体は消える
       phase = 'idle';
+      notice = null;
       refresh();
     },
-    onModeChange: function () { refresh(); },
-    onHistory: function () { refresh(); }
+    onModeChange: function () { notice = null; refresh(); },
+    onHistory: function () { refresh(); },
+    onDrawResult: function (res) {
+      notice = res.ok
+        ? { text: closureText(res.closure), kind: res.closure === 'straight' ? 'draw' : '' }
+        : { text: res.message, kind: 'error' };
+      refresh();
+    }
   });
 
   /* 次にすることを案内する（案内の欄は3行まで） */
   function guide(hasSolid) {
+    if (notice) return say(notice.text, notice.kind);
+    if (editor.mode === 'draw') return say('指やペンで、図形のまわりをぐるっとかこう。かき始めの○にもどると閉じます。', 'draw');
     if (editor.mode === 'axis1') return say('軸を通したい所を、指でなぞろう。2か所をタップしてもひけます。', 'active');
     if (editor.mode === 'axis2') return say('軸が通る2つ目の点をタップしよう。', 'active');
     if (phase === 'error') return say(errorText, 'error');
@@ -64,7 +86,7 @@
 
   /* 今やると良い段階 */
   function currentStep(hasSolid) {
-    if (!editor.shape) return 1;
+    if (!editor.shape || editor.mode === 'draw') return 1;
     if (!editor.axis || editor.mode !== 'edit') return 2;
     return hasSolid ? 3 : 4;
   }
@@ -76,7 +98,10 @@
     rail.classList.toggle('loop-on', cur === 3);
     rail.dataset.current = String(cur);
 
-    $('btn-axis').setAttribute('aria-pressed', editor.mode !== 'edit' ? 'true' : 'false');
+    var axisMode = editor.mode === 'axis1' || editor.mode === 'axis2';
+    $('btn-axis').setAttribute('aria-pressed', axisMode ? 'true' : 'false');
+    $('btn-draw').setAttribute('aria-pressed', editor.mode === 'draw' ? 'true' : 'false');
+    $('draw-label').textContent = editor.shape && editor.shape.type === 'freehand' ? 'フリーハンドでかき直す' : 'フリーハンドでかく';
     $('btn-undo').disabled = !editor.canUndo();
     $('btn-replay').disabled = !hasSolid;
     $('placeholder3d').hidden = hasSolid;
@@ -120,8 +145,12 @@
   onPress($('btn-circle'), function () { editor.placeShape('circle'); });
   onPress($('btn-semicircle'), function () { editor.placeShape('semicircle'); });
 
+  onPress($('btn-draw'), function () {
+    if (editor.mode === 'draw') editor.cancelAxis(); else editor.startDraw();
+  });
+
   onPress($('btn-axis'), function () {
-    if (editor.mode === 'edit') editor.startAxis(); else editor.cancelAxis();
+    if (editor.mode === 'axis1' || editor.mode === 'axis2') editor.cancelAxis(); else editor.startAxis();
   });
 
   onPress($('btn-rotate'), function () {

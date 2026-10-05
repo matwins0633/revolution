@@ -3,7 +3,7 @@
  *
  * 図形そのものを動かす操作（回転体をつくる操作とは別）。画面には依存しないので、Node でもテストできる。
  *   回す   ：図形の中心のまわりに回す（角度は 15° 刻みにそろえる）
- *   裏返す ：三角形・四角形は中心を通る縦の線で左右に、半円は直径を線にして裏返す
+ *   裏返す ：三角形・四角形・フリーハンドの図形は中心を通る縦の線で左右に、半円は直径を線にして裏返す
  * 図形の中心は、三角形・四角形は面積の重心、半円は直径の中点、円は円の中心。
  */
 (function (root) {
@@ -61,7 +61,7 @@
     var s = clone(shape);
     if (s.type === 'semicircle') {
       s.side = -s.side;   // 直径を線にして裏返すと、弧が反対側に移る
-    } else if (s.type === 'polygon') {
+    } else if (s.type === 'polygon' || s.type === 'freehand') {
       var cx = center(shape).x;
       s.pts = s.pts.map(function (p) { return P(2 * cx - p.x, p.y); });
     }

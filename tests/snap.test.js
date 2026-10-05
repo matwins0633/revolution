@@ -142,5 +142,39 @@ console.log('円の中心');
   check('軸がないときは吸い付かない', Snap.snapCircleCenter(P(2.3, 0), 1.5, ctx(null)) === null);
 })();
 
+
+console.log('曲線の図形（フリーハンド）の移動：軸に接する位置に吸い付く');
+(function () {
+  function ring(cx, cy, r) {
+    var pts = [];
+    for (var i = 0; i < 96; i++) { var a = i / 96 * Math.PI * 2; pts.push(P(cx + r * Math.cos(a), cy + r * Math.sin(a))); }
+    return pts;
+  }
+  function minAbs(pts, axis) { return Math.min.apply(null, pts.map(function (p) { return Math.abs(Snap.signedDist(p, axis)); })); }
+  function sideOK(pts, axis) {   // 全部が軸の片側（接する点だけが軸の上）
+    var r = pts.map(function (p) { return Snap.signedDist(p, axis); });
+    return Math.min.apply(null, r) > -1e-9 || Math.max.apply(null, r) < 1e-9;
+  }
+  var c = ring(4, 0, 1);   // 左の端は x = 3
+  var a = Snap.snapTranslationTouch(c, P(-1.7, 0.2), ctx(V));   // 左の端が x = 1.3（軸から 12px）
+  check('縦の軸：近づけると、軸にぴったり接する', a && minAbs(a.pts, V) < 1e-9 && sideOK(a.pts, V) && near(a.contact, P(1, 0.2), 1e-9),
+    a ? fmt(a.contact) : 'null');
+  check('動くのは軸に垂直な向きだけ（上下の位置はそのまま）', a && Math.abs(a.pts[0].y - (c[0].y + 0.2)) < 1e-12);
+  var b = Snap.snapTranslationTouch(c, P(-2.2, 0), ctx(V));     // 少し軸をこえた
+  check('少し軸をこえても、接する位置にもどる', b && minAbs(b.pts, V) < 1e-9 && sideOK(b.pts, V), b ? fmt(b.contact) : 'null');
+  check('遠いときは吸い付かない', Snap.snapTranslationTouch(c, P(-1, 0), ctx(V)) === null);
+  check('軸を大きくまたぐときは吸い付かない', Snap.snapTranslationTouch(c, P(-3, 0), ctx(V)) === null);
+  var d = Snap.snapTranslationTouch(ring(-3, 0, 1), P(2.7, 0), ctx(V));   // 左側から近づける
+  check('反対側から近づけても接する', d && minAbs(d.pts, V) < 1e-9 && sideOK(d.pts, V) && Math.abs(d.contact.x - 1) < 1e-9, d ? fmt(d.contact) : 'null');
+  var h = Snap.snapTranslationTouch(ring(0, 3, 1), P(0.4, -2.75), ctx(H));   // 下の端が y = -0.75（軸 y=-1 から 10px）
+  check('横の軸に接する', h && minAbs(h.pts, H) < 1e-9 && sideOK(h.pts, H) && Math.abs(h.contact.y + 1) < 1e-9, h ? fmt(h.contact) : 'null');
+  var n = P(-1 / Math.sqrt(5), 2 / Math.sqrt(5));
+  var raw = P(n.x * -1.6, n.y * -1.6);   // 斜めの軸から 3 の所にある円（半径1、軸側の端は 2）を、軸に向かって 1.6 動かす（すき間 0.4 = 16px）
+  var o = Snap.snapTranslationTouch(ring(2 + n.x * 3, 1 + n.y * 3, 1), raw, ctx(O));
+  var along = o && ((o.pts[0].x - (2 + n.x * 3 + 1 + raw.x)) * 2 + (o.pts[0].y - (1 + n.y * 3 + raw.y)) * 1) / Math.sqrt(5);
+  check('斜めの軸に接する（軸に沿った向きにはずれない）', o && minAbs(o.pts, O) < 1e-9 && sideOK(o.pts, O) && Math.abs(along) < 1e-9, o ? fmt(o.contact) : 'null');
+  check('軸がないときは吸い付かない', Snap.snapTranslationTouch(c, P(-1.7, 0), ctx(null)) === null);
+})();
+
 console.log('\n合格 ' + passed + ' / 不合格 ' + failed);
 process.exit(failed ? 1 : 0);

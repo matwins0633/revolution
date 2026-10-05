@@ -97,5 +97,27 @@ console.log('回した・裏返した図形からできる立体');
     vs.toFixed(4) + ' / ' + vf.toFixed(4));
 })();
 
+
+console.log('フリーハンドの図形');
+(function () {
+  var fpts = [P(1, 0), P(3, 0), P(4, 1), P(3, 3), P(1, 2)];
+  var fh = { type: 'freehand', pts: fpts, corners: [true, false, true, false, true] };
+  var c = T.center(fh);
+  // 面積の重心（多角形の公式）
+  var a = 0, cx = 0, cy = 0;
+  for (var i = 0; i < fpts.length; i++) {
+    var p = fpts[i], q = fpts[(i + 1) % fpts.length], cr = p.x * q.y - q.x * p.y;
+    a += cr; cx += (p.x + q.x) * cr; cy += (p.y + q.y) * cr;
+  }
+  check('中心は面積の重心', near(c, P(cx / (3 * a), cy / (3 * a))));
+  var f = T.flip(fh);
+  check('中心を通る縦の線で左右に裏返る', f.pts.every(function (p, k) { return near(p, P(2 * c.x - fpts[k].x, fpts[k].y)); }));
+  check('角の印はそのまま', JSON.stringify(f.corners) === JSON.stringify(fh.corners));
+  check('2回裏返すともとに戻る', T.flip(f).pts.every(function (p, k) { return near(p, fpts[k], 1e-12); }));
+  var r = T.rotate(fh, 30 * DEG);
+  check('回しても辺の長さは同じ・角の印はそのまま', sides(r.pts).every(function (v, k) { return Math.abs(v - sides(fpts)[k]) < 1e-9; }) &&
+    JSON.stringify(r.corners) === JSON.stringify(fh.corners));
+})();
+
 console.log('\n合格 ' + passed + ' / 不合格 ' + failed);
 process.exit(failed ? 1 : 0);

@@ -15,6 +15,7 @@
       <symbol id="i-quad" viewBox="0 0 24 24"><rect x="4.5" y="6" width="15" height="12" rx="1"/></symbol>
       <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></symbol>
       <symbol id="i-semi" viewBox="0 0 24 24"><path d="M4.5 16.5a7.5 7.5 0 0 1 15 0z"/></symbol>
+      <symbol id="i-free" viewBox="0 0 24 24"><path d="M8.5 19.2C4.5 18 3 12.5 5.6 8.6S14 3.6 17.6 6.4s2.9 9.2-1.4 11.6c-2.6 1.4-5.6 1.4-7.2.4"/><circle cx="8.6" cy="19.2" r="1.8" fill="currentColor"/></symbol>
       <symbol id="i-axis" viewBox="0 0 24 24"><path d="M6 18 18 6" stroke-dasharray="3 3"/><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="5" r="2" fill="currentColor"/></symbol>
       <symbol id="i-solid" viewBox="0 0 24 24"><path d="M12 2.5v19" stroke-dasharray="2.5 2.5"/><path d="M15.5 9.4A8 3.2 0 1 1 8.5 9.4"/><path d="m13.5 7.4 2.2 2-2.7 1.1"/></symbol>
       <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a6 6 0 0 1 0 12h-3"/></symbol>
@@ -42,6 +43,7 @@
             <button id="btn-quad" class="btn tool shape" type="button"><svg class="icon"><use href="#i-quad"/></svg>四角形</button>
             <button id="btn-circle" class="btn tool shape" type="button"><svg class="icon"><use href="#i-circle"/></svg>円</button>
             <button id="btn-semicircle" class="btn tool shape" type="button"><svg class="icon"><use href="#i-semi"/></svg>半円</button>
+            <button id="btn-draw" class="btn tool shape draw" type="button" aria-pressed="false"><svg class="icon"><use href="#i-free"/></svg><span id="draw-label">フリーハンドでかく</span></button>
           </div>
         </li>
         <li class="step" data-step="2">
@@ -126,6 +128,7 @@
   <script src="vendor/three/three.min.js"></script>
   <script src="js/geometry.js"></script>
   <script src="js/snap.js"></script>
+  <script src="js/freehand.js"></script>
   <script src="js/transform.js"></script>
   <script src="js/editor2d.js"></script>
   <script src="js/view3d.js"></script>
