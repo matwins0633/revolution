@@ -199,6 +199,17 @@
     if (phase === 'rotating') { phase = 'done'; refresh(); }
   });
 
+  /* ---------- 右上の「使い方」（README の内容） ---------- */
+
+  Help.setup({
+    opener: $('btn-info'),
+    overlay: $('help'),
+    body: $('help-body'),
+    close: $('help-close'),
+    tabs: [$('tab-student'), $('tab-teacher')],
+    onPress: onPress
+  });
+
   /* ---------- ④から③に戻る矢印の位置（③の見出しから④のボタンまで） ---------- */
 
   function placeLoop() {

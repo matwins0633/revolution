@@ -285,7 +285,7 @@ html, body {
   margin-top: auto;
   padding-top: 6px;
 }
-/* 元に戻す：すすむ ＝ 2：1 の横幅で、高さは同じ */
+/* 元に戻す：進む ＝ 2：1 の横幅で、高さは同じ */
 .history-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 6px; }
 .history-row .btn { padding-left: 3px; padding-right: 3px; gap: 3px; font-size: 15px; white-space: nowrap; }
 .history-row .icon { width: 18px; height: 18px; }
@@ -533,6 +533,123 @@ input[type="range"]:focus-visible { outline: 3px solid var(--ink); outline-offse
 @media (max-width: 600px) {
   html, body { overflow: auto; }
   .app { height: auto; grid-template-rows: auto 75vh 75vh; }
+}
+
+/* ---------- 右上の「使い方」（ⓘ） ---------- */
+.info-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 20;
+  width: 44px;
+  min-height: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+}
+.info-btn .icon { width: 26px; height: 26px; }
+.panel-3d .toolbar { padding-right: 52px; }   /* ⓘ と重ならないように */
+.narrow-br { display: none; }
+
+.help {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(31, 42, 68, 0.45);
+}
+.help[hidden] { display: none; }
+.help-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: 88vh;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: 0 12px 40px rgba(31, 42, 68, 0.3);
+}
+.help-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.help-title { margin: 0; font-size: 20px; white-space: nowrap; }
+.help-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 auto;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--tint);
+}
+.help-tab {
+  min-height: 44px;
+  padding: 6px 20px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.help-tab[aria-selected="true"] { border-color: var(--ink); background: var(--paper); color: var(--ink); }
+.help-tab:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.help-close { width: 44px; min-height: 44px; height: 44px; padding: 0; border-radius: 50%; }
+.help-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;           /* 中身だけがスクロールして、ページ全体は動かない */
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding: 6px 26px 30px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.75;
+}
+.help-body h3, .help-body h4 {
+  margin: 24px 0 6px;
+  padding-left: 10px;
+  border-left: 4px solid var(--ink);
+  font-size: 18px;
+  line-height: 1.4;
+}
+.help-body p { margin: 10px 0; }
+.help-body ul, .help-body ol { margin: 6px 0; padding-left: 1.5em; }
+.help-body li { margin: 3px 0; }
+.help-body li > ul, .help-body li > ol { margin: 2px 0; }
+.help-body strong { font-weight: 700; }
+.help-body code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--tint);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+.help-body hr { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
+.help-table { overflow-x: auto; }
+.help-table table { border-collapse: collapse; margin: 8px 0; }
+.help-table th, .help-table td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.help-table th { background: var(--tint); }
+
+/* 幅の少ない横向きの画面（iPad 横 1024×768 など）：3Dの上の道具の並びを、ⓘ と重ならないようにつめる */
+@media (orientation: landscape) and (max-width: 1100px) {
+  .panel-3d .toolbar { gap: 6px; }
+  #btn-view { font-size: 14px; line-height: 1.15; padding: 4px 8px; gap: 4px; text-align: left; }
+  .narrow-br { display: inline; }
+}
+/* 縦向き：上の帯の右上に ⓘ を置くので、1段目（①）の右に場所をあける */
+@media (orientation: portrait), (max-width: 900px) {
+  .step[data-step="1"] { margin-right: 50px; }
+  .panel-3d .toolbar { padding-right: 0; }
+  .narrow-br { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

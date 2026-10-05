@@ -129,7 +129,7 @@
     this.selected = false;     // 図形が選ばれているか
     this.showFold = false;     // 「折り返しを見る」
     this.history = [];         // 「元に戻す」のための記録（変える直前の状態）
-    this.future = [];          // 「すすむ」のための記録（元に戻す直前の状態）
+    this.future = [];          // 「進む」のための記録（元に戻す直前の状態）
     this.pointers = {};        // 画面に触れている指・ペン・マウス
     this.ignored = {};         // 無視している指（手のひら・3本目の指など）
     this.op = null;            // 今している操作
@@ -287,14 +287,14 @@
   Editor2D.prototype.record = function (json) {
     this.history.push(json || this.stateJSON());
     if (this.history.length > HISTORY_MAX) this.history.shift();
-    this.future = [];   // 元に戻したあとに新しい操作をしたら、それより先には「すすむ」できない
+    this.future = [];   // 元に戻したあとに新しい操作をしたら、それより先には「進む」できない
     if (this.cb.onHistory) this.cb.onHistory(this.canUndo());
   };
 
   Editor2D.prototype.canUndo = function () { return this.history.length > 0; };
   Editor2D.prototype.canRedo = function () { return this.future.length > 0; };
 
-  /* 記録した状態に移る（元に戻す・すすむ） */
+  /* 記録した状態に移る（元に戻す・進む） */
   Editor2D.prototype.restore = function (json, what) {
     this.abortOp();
     var s = JSON.parse(json);
